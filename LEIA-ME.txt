@@ -1,0 +1,23 @@
+CONTROLE DE VALIDADE — PWA
+
+Arquivos:
+- login.html
+- leitor.html
+- cadastro.html
+- dashboard.html
+- lista_valididades.html
+- manifest.json
+- service-worker.js
+- icons/
+
+PUBLICAÇÃO:
+1. Envie TODOS esses arquivos para a mesma pasta/raiz do seu site.
+2. Mantenha os nomes exatamente como estão.
+3. Abra o login pelo HTTPS.
+4. No Android/Chrome, use a opção "Instalar app" quando aparecer.
+5. No iPhone/Safari: Compartilhar -> Adicionar à Tela de Início.
+
+IMPORTANTE:
+- O PWA não substitui o Supabase nem altera o banco.
+- A câmera continua usando HTTPS e as bibliotecas atuais.
+- O service worker faz cache apenas dos arquivos locais do app.

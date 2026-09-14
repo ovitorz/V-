@@ -1,0 +1,44 @@
+{
+  "name": "Controle de Validade",
+  "short_name": "Validades",
+  "description": "Controle de validade de produtos",
+  "lang": "pt-BR",
+  "start_url": "./login.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f7f8",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Ler código",
+      "short_name": "Leitor",
+      "url": "./leitor.html"
+    },
+    {
+      "name": "Validades",
+      "short_name": "Validades",
+      "url": "./lista_valididades.html"
+    }
+  ]
+}
