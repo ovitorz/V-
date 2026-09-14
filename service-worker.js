@@ -1,7 +1,6 @@
 const CACHE_NAME = 'validades-app-v1';
 
 const APP_SHELL = [
-  './',
   './login.html',
   './leitor.html',
   './app_validade_estilo_beep_codigo.html',
