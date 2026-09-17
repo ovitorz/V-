@@ -1066,14 +1066,16 @@ function openRecord(record){
 
   const lossWrap = document.getElementById('lossQuantityWrap');
   const lossInput = document.getElementById('lossQuantity');
-  const isExpired = record._days !== null && record._days < 0;
+
+  // Usa exatamente o mesmo status que aparece no card.
+  // Se estiver "VENCIDO", mostra a quantidade vencida.
+  const isExpired = record._status && record._status.kind === 'expired';
+
+  lossWrap.style.display = isExpired ? 'block' : 'none';
+  lossInput.value = '';
 
   if(isExpired){
-    lossWrap.style.display = 'block';
-    lossInput.value = '';
-  }else{
-    lossWrap.style.display = 'none';
-    lossInput.value = '';
+    lossInput.focus();
   }
 
   document.getElementById(
@@ -1237,8 +1239,8 @@ async function deleteRecord(){
   }
 
   const isExpired =
-    record._days !== null &&
-    record._days < 0;
+    record._status &&
+    record._status.kind === 'expired';
 
   let quantidadePerdida = 0;
 
