@@ -1233,16 +1233,31 @@ async function deleteRecord(){
     return;
   }
 
-  const isExpired = record._days !== null && record._days < 0;
+  // Regra: somente validade realmente vencida pede quantidade.
+  // Usamos a data do próprio registro para não depender do texto do status.
+  const isExpired =
+    record.validade &&
+    daysUntil(record.validade) < 0;
+
   let quantidadePerdida = 0;
 
   if(isExpired){
     const input = document.getElementById('lossQuantity');
-    const raw = String(input?.value ?? '').trim();
+
+    // Garantia extra: se por algum motivo o campo não estiver visível,
+    // ainda assim NÃO permite excluir direto.
+    if(!input){
+      alert('Informe a quantidade vencida antes de excluir.');
+      return;
+    }
+
+    input.closest('#lossQuantityWrap')?.style.setProperty('display','block');
+
+    const raw = String(input.value ?? '').trim();
 
     if(raw === ''){
       alert('Informe a quantidade vencida antes de excluir.');
-      input?.focus();
+      input.focus();
       return;
     }
 
@@ -1250,7 +1265,7 @@ async function deleteRecord(){
 
     if(!Number.isInteger(quantidadePerdida) || quantidadePerdida < 0){
       alert('Informe uma quantidade inteira igual ou maior que zero.');
-      input?.focus();
+      input.focus();
       return;
     }
   }else{
