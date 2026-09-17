@@ -1223,60 +1223,84 @@ async function deleteRecord(){
     return;
   }
 
-  const record =
-    records.find(
-      r => String(r.id) === String(selectedRecordId)
-    );
+  const record = records.find(
+    r => String(r.id) === String(selectedRecordId)
+  );
 
   if(!record){
     closeRecordModal();
     return;
   }
 
-  // Regra: somente validade realmente vencida pede quantidade.
-  // Usamos a data do próprio registro para não depender do texto do status.
-  const isExpired =
-    record.validade &&
-    daysUntil(record.validade) < 0;
+  /*
+    REGRA:
+    - Vence hoje / faltam 1, 2 ou 3 dias: exclusão normal.
+    - Vencido: SEMPRE perguntar a quantidade vencida.
+    - Quantidade 0: não registra perda, mas permite excluir.
+    - Quantidade > 0: registra em perdas e depois exclui a validade.
+  */
+  const diasReais = record.validade ? daysUntil(record.validade) : null;
+  const isExpired = diasReais !== null && diasReais < 0;
 
   let quantidadePerdida = 0;
 
   if(isExpired){
-    const input = document.getElementById('lossQuantity');
 
-    // Garantia extra: se por algum motivo o campo não estiver visível,
-    // ainda assim NÃO permite excluir direto.
-    if(!input){
-      alert('Informe a quantidade vencida antes de excluir.');
+    /*
+      Usa prompt de propósito aqui:
+      a quantidade é solicitada SOMENTE quando o usuário
+      clica em EXCLUIR. Assim não depende de campo oculto
+      no modal ou de CSS para aparecer.
+    */
+    const resposta = prompt(
+      `⚠️ PRODUTO VENCIDO\n\n` +
+      `${getProductName(record)}\n\n` +
+      `Informe a quantidade vencida:`
+    );
+
+    // Cancelar = não excluir nada
+    if(resposta === null){
       return;
     }
 
-    input.closest('#lossQuantityWrap')?.style.setProperty('display','block');
-
-    const raw = String(input.value ?? '').trim();
+    const raw = String(resposta).trim();
 
     if(raw === ''){
-      alert('Informe a quantidade vencida antes de excluir.');
-      input.focus();
+      alert('Informe a quantidade vencida.');
       return;
     }
 
     quantidadePerdida = Number(raw);
 
-    if(!Number.isInteger(quantidadePerdida) || quantidadePerdida < 0){
+    if(
+      !Number.isInteger(quantidadePerdida) ||
+      quantidadePerdida < 0
+    ){
       alert('Informe uma quantidade inteira igual ou maior que zero.');
-      input.focus();
       return;
     }
+
+    if(!confirm(
+      `Excluir a validade de ${getProductName(record)}?\n\n` +
+      `Quantidade vencida informada: ${quantidadePerdida}`
+    )){
+      return;
+    }
+
   }else{
-    if(!confirm(`Excluir a validade de ${getProductName(record)}?`)){
+
+    if(!confirm(
+      `Excluir a validade de ${getProductName(record)}?`
+    )){
       return;
     }
   }
 
   let perdaCriadaId = null;
 
+  // Só cria perda quando a quantidade for maior que zero.
   if(isExpired && quantidadePerdida > 0){
+
     const {data:perda,error:perdaError} = await supabaseClient
       .from('perdas')
       .insert({
@@ -1292,7 +1316,10 @@ async function deleteRecord(){
 
     if(perdaError){
       console.error('Erro ao registrar perda:', perdaError);
-      alert('Não foi possível registrar a quantidade vencida.\n\n' + perdaError.message);
+      alert(
+        'Não foi possível registrar a quantidade vencida.\n\n' +
+        perdaError.message
+      );
       return;
     }
 
@@ -1308,6 +1335,7 @@ async function deleteRecord(){
   if(error){
     console.error('Erro ao excluir validade:', error);
 
+    // Se a validade não pôde ser excluída, desfaz a perda criada.
     if(perdaCriadaId){
       const {error:rollbackError} = await supabaseClient
         .from('perdas')
@@ -1315,11 +1343,17 @@ async function deleteRecord(){
         .eq('id', perdaCriadaId);
 
       if(rollbackError){
-        console.error('Erro ao desfazer perda criada:', rollbackError);
+        console.error(
+          'Erro ao desfazer perda criada:',
+          rollbackError
+        );
       }
     }
 
-    alert('Não foi possível excluir o registro.\n\n' + error.message);
+    alert(
+      'Não foi possível excluir o registro.\n\n' +
+      error.message
+    );
     return;
   }
 
