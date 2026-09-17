@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Perdas</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f5f7;color:#111827}
+.main{margin:0 auto;padding:24px;max-width:1250px}
+.back{display:inline-flex;align-items:center;gap:7px;border:1px solid #d1d5db;background:#fff;color:#111827;border-radius:9px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:20px}
+.back:hover{background:#f9fafb}
+.top{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:22px}
+h1{margin:0;font-size:28px}
+.month{border:1px solid #d1d5db;border-radius:9px;padding:10px 12px;background:#fff;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px}
+.card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px #0000000d}
+.label{font-size:13px;color:#6b7280;margin-bottom:8px}
+.value{font-size:25px;font-weight:800}
+.section{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px #0000000d;margin-bottom:20px}
+.tabs{display:flex;gap:8px;border-bottom:1px solid #e5e7eb;margin:-4px -20px 20px;padding:0 20px}
+.tab{border:0;background:transparent;padding:12px 16px;font-weight:700;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent}
+.tab.active{color:#111827;border-bottom-color:#111827}
+.store-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.store{border:1px solid #e5e7eb;border-radius:10px;padding:16px;cursor:pointer}
+.store:hover{background:#f9fafb}
+.store h3{margin:0 0 10px;font-size:16px}
+.store-total{font-size:22px;font-weight:800}
+.small{font-size:13px;color:#6b7280;margin-top:4px}
+.detail{margin-top:20px;border-top:1px solid #e5e7eb;padding-top:18px}
+.detail h2{margin:0 0 15px;font-size:19px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #e5e7eb;font-size:14px}
+th{color:#6b7280;font-size:12px;text-transform:uppercase}
+.empty{padding:25px;text-align:center;color:#6b7280;background:#f9fafb;border-radius:9px}
+.cost-list{display:flex;flex-direction:column;gap:10px}
+.cost-row{display:grid;grid-template-columns:110px 1fr 150px 150px 130px;gap:14px;align-items:center;border:1px solid #e5e7eb;border-radius:10px;padding:13px}
+.cost-row .date{font-weight:700}
+.cost-row .product{font-weight:700}
+.cost-row .stores{font-size:12px;color:#6b7280;margin-top:3px}
+.cost-input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
+.cost-status{font-size:13px;color:#6b7280}
+.btn{border:0;background:#111827;color:#fff;border-radius:8px;padding:10px 13px;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.saved{color:#166534;font-weight:700}
+.notice{background:#f3f4f6;border-radius:9px;padding:12px 14px;margin-bottom:15px;font-size:13px;color:#4b5563}
+@media(max-width:850px){
+.main{padding:16px}.cards,.store-grid{grid-template-columns:1fr}
+.cost-row{grid-template-columns:1fr 1fr}
+}
+@media(max-width:520px){.cost-row{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+
+<main class="main">
+  <button class="back" onclick="go('dashboard.html')">← Voltar ao Dashboard</button>
+  <div class="top">
+    <h1>Perdas</h1>
+    <input id="month" class="month" type="month" value="2026-09">
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Total de perdas</div><div class="value" id="totalLoss">R$ 0,00</div></div>
+    <div class="card"><div class="label">Unidades perdidas</div><div class="value" id="totalUnits">0</div></div>
+    <div class="card"><div class="label">Custos pendentes</div><div class="value" id="pendingCount">0</div></div>
+  </div>
+
+  <section class="section">
+    <div class="tabs">
+      <button id="tabReport" class="tab active" onclick="showTab('report')">Relatório</button>
+      <button id="tabCosts" class="tab" onclick="showTab('costs')">Custos</button>
+    </div>
+
+    <div id="reportTab">
+      <div id="stores" class="store-grid"></div>
+      <div id="detail" class="detail" style="display:none"></div>
+    </div>
+
+    <div id="costsTab" style="display:none">
+      <div class="notice">
+        Aqui aparecem os produtos que tiveram perda no mês e ainda não possuem custo informado.
+        O custo é preenchido uma vez por <strong>produto + data da perda</strong> e será usado para calcular as perdas de todas as lojas naquela data.
+      </div>
+      <div id="costList" class="cost-list"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/*
+  INTEGRAÇÃO SUPABASE
+  -------------------
+  A tela já está preparada para trabalhar com qualquer quantidade de lojas.
+  Não existe mais dependência de "Loja 1/2/3": as lojas virão do banco.
+
+  Quando a tabela "perdas" estiver criada no Supabase, altere USE_SUPABASE para true.
+  Estrutura esperada para a tabela perdas:
+    id
+    loja_id
+    produto_id
+    quantidade
+    data_perda
+    custo
+    criado_por
+    criado_em
+
+  A consulta abaixo usa:
+    perdas -> lojas
+    perdas -> produtos
+
+  O restante da tela continua usando o mesmo formato interno.
+*/
+
+const SUPABASE_URL = 'https://siuvsahkjfyzdcrskleg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_At--bKaS3ZiZA0dmyN5FIQ_5WF735Nl';
+const USE_SUPABASE = true;
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Mock apenas para a tela continuar funcionando antes da tabela perdas existir.
+const losses = [
+  {id:1,store:'Loja 1',product:'Coca-Cola 2L',barcode:'789000000001',qty:5,date:'2026-09-05',cost:null},
+  {id:2,store:'Loja 1',product:'Cheetos Requeijão',barcode:'7892840824754',qty:3,date:'2026-09-08',cost:null},
+  {id:3,store:'Loja 2',product:'Cheetos Requeijão',barcode:'7892840824754',qty:5,date:'2026-09-08',cost:null},
+  {id:4,store:'Loja 3',product:'Cheetos Requeijão',barcode:'7892840824754',qty:4,date:'2026-09-08',cost:null},
+  {id:5,store:'Loja 2',product:'Arroz 5kg',barcode:'789000000002',qty:2,date:'2026-09-10',cost:null}
+];
+
+let lossData = [...losses];
+
+async function loadLossesFromSupabase(){
+  if(!USE_SUPABASE) return;
+
+  const { data, error } = await supabaseClient
+    .from('perdas')
+    .select(`
+      id,
+      loja_id,
+      produto_id,
+      quantidade,
+      data_perda,
+      custo,
+      lojas ( id, nome ),
+      produtos ( id, nome, codigo_barras )
+    `)
+    .order('data_perda', { ascending:false });
+
+  if(error){
+    console.error('Erro ao carregar perdas:', error);
+    alert('Não foi possível carregar as perdas do Supabase.');
+    return;
+  }
+
+  lossData = (data || []).map(x => ({
+    id: x.id,
+    store: x.lojas?.nome || 'Loja não identificada',
+    storeId: x.loja_id,
+    product: x.produtos?.nome || 'Produto não identificado',
+    productId: x.produto_id,
+    barcode: x.produtos?.codigo_barras || '',
+    qty: Number(x.quantidade || 0),
+    date: x.data_perda,
+    cost: x.custo == null ? null : Number(x.custo)
+  }));
+
+  render();
+}
+
+async function saveCostToSupabase(g, cost){
+  if(!USE_SUPABASE) return true;
+
+  const { error } = await supabaseClient
+    .from('perdas')
+    .update({ custo: cost })
+    .eq('produto_id', g.productId)
+    .eq('data_perda', g.date);
+
+  if(error){
+    console.error('Erro ao salvar custo:', error);
+    alert('Não foi possível salvar o custo no Supabase.');
+    return false;
+  }
+
+  return true;
+}
+
+function go(page){ location.href=page; }
+function brl(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function fmtDate(s){const [y,m,d]=s.split('-');return d+'/'+m+'/'+y;}
+function key(x){return x.product+'|'+x.date;}
+function selectedMonth(){return document.getElementById('month').value;}
+
+function monthLosses(){
+  const m=selectedMonth();
+  return lossData.filter(x=>x.date.slice(0,7)===m);
+}
+
+function render(){
+  const data=monthLosses();
+
+  const totalUnits=data.reduce((s,x)=>s+x.qty,0);
+  const totalLoss=data.reduce((s,x)=>s+x.qty*(Number(x.cost)||0),0);
+  const pending=[...new Set(data.filter(x=>x.cost==null).map(key))].length;
+
+  document.getElementById('totalUnits').textContent=totalUnits;
+  document.getElementById('totalLoss').textContent=brl(totalLoss);
+  document.getElementById('pendingCount').textContent=pending;
+
+  const byStore={};
+  data.forEach(x=>{
+    if(!byStore[x.store])byStore[x.store]=[];
+    byStore[x.store].push(x);
+  });
+
+  const stores=document.getElementById('stores');
+  stores.innerHTML='';
+  Object.keys(byStore).sort().forEach(store=>{
+    const arr=byStore[store];
+    const units=arr.reduce((s,x)=>s+x.qty,0);
+    const value=arr.reduce((s,x)=>s+x.qty*(Number(x.cost)||0),0);
+    const div=document.createElement('div');
+    div.className='store';
+    div.onclick=()=>showStore(store,arr);
+    div.innerHTML=`<h3>${store}</h3><div class="store-total">${brl(value)}</div><div class="small">${units} unidade(s) perdida(s)</div>`;
+    stores.appendChild(div);
+  });
+  if(!Object.keys(byStore).length) stores.innerHTML='<div class="empty">Nenhuma perda registrada neste mês.</div>';
+
+  renderCosts(data);
+}
+
+function showStore(store,arr){
+  const detail=document.getElementById('detail');
+  detail.style.display='block';
+  const value=arr.reduce((s,x)=>s+x.qty*(Number(x.cost)||0),0);
+  detail.innerHTML=`
+    <h2>${store} — ${brl(value)}</h2>
+    <table>
+      <thead><tr><th>Produto</th><th>Data</th><th>Qtd.</th><th>Custo</th><th>Perda</th></tr></thead>
+      <tbody>
+        ${arr.map(x=>`<tr>
+          <td>${x.product}</td><td>${fmtDate(x.date)}</td><td>${x.qty}</td>
+          <td>${x.cost==null?'Pendente':brl(x.cost)}</td>
+          <td>${x.cost==null?'Pendente':brl(x.qty*x.cost)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  detail.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function renderCosts(data){
+  const groups={};
+  data.forEach(x=>{
+    const k=key(x);
+    if(!groups[k])groups[k]={product:x.product,productId:x.productId,date:x.date,stores:[],qty:0,cost:x.cost};
+    if(!groups[k].stores.includes(x.store))groups[k].stores.push(x.store);
+    groups[k].qty+=x.qty;
+    if(x.cost!=null)groups[k].cost=x.cost;
+  });
+
+  const list=document.getElementById('costList');
+  const arr=Object.values(groups).sort((a,b)=>a.date.localeCompare(b.date)||a.product.localeCompare(b.product));
+  if(!arr.length){list.innerHTML='<div class="empty">Nenhuma perda neste mês.</div>';return;}
+
+  list.innerHTML=arr.map((g,i)=>{
+    const saved=g.cost!=null;
+    return `<div class="cost-row">
+      <div class="date">${fmtDate(g.date)}</div>
+      <div><div class="product">${g.product}</div><div class="stores">${g.stores.join(', ')}</div></div>
+      <div><div class="small">Unidades</div><strong>${g.qty}</strong></div>
+      <div><div class="small">Custo unitário</div><input id="cost_${i}" class="cost-input" type="number" min="0" step="0.01" placeholder="R$ 0,00" value="${saved?g.cost:''}" ${saved?'disabled':''}></div>
+      <div><button class="btn" onclick="saveCost(${i})" ${saved?'disabled':''}>${saved?'Salvo':'Salvar'}</button><div id="status_${i}" class="cost-status ${saved?'saved':''}">${saved?'Aplicado às lojas':''}</div></div>
+    </div>`;
+  }).join('');
+
+  window.costGroups=arr;
+}
+
+async function saveCost(i){
+  const g=window.costGroups[i];
+  const input=document.getElementById('cost_'+i);
+  const v=parseFloat(input.value.replace(',','.'));
+  if(!Number.isFinite(v)||v<0){alert('Informe um custo válido.');return;}
+
+  const ok = await saveCostToSupabase(g, v);
+  if(!ok) return;
+
+  lossData.forEach(x=>{
+    if(
+      (g.productId && x.productId===g.productId || !g.productId && x.product===g.product)
+      && x.date===g.date
+    ) x.cost=v;
+  });
+
+  render();
+  showTab('costs');
+}
+
+function showTab(tab){
+  const report=tab==='report';
+  document.getElementById('reportTab').style.display=report?'block':'none';
+  document.getElementById('costsTab').style.display=report?'none':'block';
+  document.getElementById('tabReport').classList.toggle('active',report);
+  document.getElementById('tabCosts').classList.toggle('active',!report);
+}
+
+document.getElementById('month').addEventListener('change',render);
+
+(async function init(){
+  await loadLossesFromSupabase();
+  render();
+})();
+</script>
+</body>
+</html>
