@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="./manifest.json">
+  <title>Perdas | Valida+</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f5f7;
+      color: #202124;
+    }
+
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* MENU */
+    .sidebar {
+      width: 238px;
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      padding: 22px 14px;
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+    }
+
+    .brand {
+      font-size: 22px;
+      font-weight: 800;
+      padding: 4px 12px 24px;
+    }
+
+    .brand span { color: #777; }
+
+    .nav {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .nav button {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      padding: 13px 12px;
+      border-radius: 9px;
+      text-align: left;
+      font-size: 14px;
+      cursor: pointer;
+      color: #444;
+    }
+
+    .nav button:hover,
+    .nav button.active {
+      background: #f0f1f3;
+      color: #111;
+      font-weight: 700;
+    }
+
+    /* CONTEÚDO */
+    main {
+      margin-left: 238px;
+      width: calc(100% - 238px);
+      padding: 28px;
+    }
+
+    .top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 25px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .month-box {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .month-box label {
+      font-size: 12px;
+      color: #777;
+    }
+
+    .month-box input {
+      border: 0;
+      outline: none;
+      font-size: 14px;
+      font-weight: 700;
+      background: transparent;
+    }
+
+    /* RESUMO */
+    .summary {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card-label {
+      color: #777;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .big-value {
+      font-size: 27px;
+      font-weight: 800;
+    }
+
+    .loss-card {
+      border-left: 4px solid #d93025;
+    }
+
+    /* LOJAS */
+    .section {
+      margin-top: 22px;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .section-info {
+      color: #777;
+      font-size: 13px;
+    }
+
+    .stores {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+
+    .store-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 18px;
+      cursor: pointer;
+      transition: .15s;
+    }
+
+    .store-card:hover {
+      border-color: #bbb;
+      transform: translateY(-1px);
+    }
+
+    .store-name {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 15px;
+    }
+
+    .store-values {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .store-value strong {
+      display: block;
+      font-size: 20px;
+      margin-bottom: 3px;
+    }
+
+    .store-value span {
+      font-size: 12px;
+      color: #777;
+    }
+
+    .empty {
+      background: #fff;
+      border: 1px dashed #d5d7da;
+      border-radius: 12px;
+      padding: 35px;
+      text-align: center;
+      color: #777;
+      font-size: 14px;
+    }
+
+    /* DETALHE */
+    .detail {
+      display: none;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .detail-head {
+      padding: 18px 20px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .detail-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .close-btn {
+      border: 0;
+      background: #f1f2f4;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 13px 18px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      color: #777;
+      font-size: 12px;
+      font-weight: 700;
+      background: #fafafa;
+    }
+
+    td strong {
+      font-size: 14px;
+    }
+
+    .money {
+      font-weight: 800;
+    }
+
+    /* ABA CUSTOS */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .tab {
+      border: 1px solid #ddd;
+      background: #fff;
+      border-radius: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .tab.active {
+      background: #202124;
+      color: #fff;
+      border-color: #202124;
+    }
+
+    .costs {
+      display: none;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .costs-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #777;
+      margin-bottom: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #d8dadd;
+      border-radius: 8px;
+      outline: none;
+      font-size: 14px;
+    }
+
+    .save-btn {
+      padding: 11px 17px;
+      border: 0;
+      border-radius: 8px;
+      background: #202124;
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    .notice {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .loading {
+      padding: 25px;
+      text-align: center;
+      color: #777;
+    }
+
+    @media (max-width: 800px) {
+      .sidebar {
+        width: 100%;
+        height: auto;
+        bottom: auto;
+        position: relative;
+        border-right: 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .layout { display: block; }
+
+      main {
+        margin-left: 0;
+        width: 100%;
+        padding: 18px;
+      }
+
+      .nav {
+        flex-direction: row;
+        overflow-x: auto;
+      }
+
+      .nav button {
+        white-space: nowrap;
+        width: auto;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .top {
+        flex-direction: column;
+      }
+
+      .month-box {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .costs-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">Valida<span>+</span></div>
+
+    <div class="nav">
+      <button onclick="location.href='dashboard.html'">▦ Dashboard</button>
+      <button onclick="location.href='lista_valididades.html'">✓ Validades</button>
+      <button onclick="location.href='leitor.html'">▣ Ler código</button>
+      <button class="active">📉 Perdas</button>
+    </div>
+  </aside>
+
+  <main>
+
+    <div class="top">
+      <div>
+        <h1>Perdas</h1>
+        <p class="subtitle">Levantamento de perdas e prejuízo por loja</p>
+      </div>
+
+      <div class="month-box">
+        <label for="mes">Período</label>
+        <input type="month" id="mes">
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabRelatorio" onclick="mostrarAba('relatorio')">
+        📊 Relatório
+      </button>
+      <button class="tab" id="tabCustos" onclick="mostrarAba('custos')">
+        💰 Custos
+      </button>
+    </div>
+
+    <!-- RELATÓRIO -->
+    <section id="relatorio">
+
+      <div class="summary">
+        <div class="card loss-card">
+          <div class="card-label">PERDA TOTAL</div>
+          <div class="big-value" id="perdaTotal">R$ 0,00</div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">QUANTIDADE PERDIDA</div>
+          <div class="big-value" id="qtdTotal">0</div>
+          <div class="section-info">unidades</div>
+        </div>
+
+        <div class="card">
+          <div class="card-label">LOJAS COM PERDA</div>
+          <div class="big-value" id="lojasTotal">0</div>
+          <div class="section-info">no período</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Perdas por loja</div>
+          <div class="section-info" id="periodoTexto"></div>
+        </div>
+
+        <div id="stores" class="stores">
+          <div class="loading">Carregando...</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div id="detail" class="detail">
+          <div class="detail-head">
+            <div>
+              <div class="detail-title" id="detailTitle">Detalhes da loja</div>
+              <div class="section-info" id="detailInfo"></div>
+            </div>
+            <button class="close-btn" onclick="fecharDetalhe()">Fechar</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Código</th>
+                  <th>Qtd.</th>
+                  <th>Custo unit.</th>
+                  <th>Perda</th>
+                  <th>Data</th>
+                </tr>
+              </thead>
+              <tbody id="detailBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- CUSTOS -->
+    <section id="custos" class="costs">
+      <div class="section-title">Custo dos produtos</div>
+      <p class="subtitle" style="margin:7px 0 20px;">
+        Cadastre o custo unitário para calcular o prejuízo das perdas.
+      </p>
+
+      <div class="costs-grid">
+        <div class="field">
+          <label>Buscar produto</label>
+          <input id="buscaProduto" placeholder="Digite o código ou nome do produto">
+        </div>
+
+        <div class="field">
+          <label>Custo unitário (R$)</label>
+          <input id="custoProduto" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+
+        <button class="save-btn" onclick="salvarCusto()">Salvar custo</button>
+      </div>
+
+      <div class="notice">
+        O funcionário não precisa informar o custo durante o registro da perda.
+        O custo fica nesta área para quem possui acesso ao painel.
+      </div>
+
+      <div id="resultadoProduto" style="margin-top:18px;"></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  const SUPABASE_URL = 'https://siuvsahkjfyzdcrskleg.supabase.co';
+  const SUPABASE_KEY = 'COLE_A_MESMA_CHAVE_DO_SEU_DASHBOARD_AQUI';
+
+  const supabaseClient = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  let usuario = null;
+  let lojas = [];
+  let perdas = [];
+  let produtos = [];
+  let lojaSelecionada = null;
+
+  const hoje = new Date();
+  document.getElementById('mes').value =
+    hoje.getFullYear() + '-' + String(hoje.getMonth() + 1).padStart(2, '0');
+
+  document.getElementById('mes').addEventListener('change', carregar);
+
+  function moeda(valor) {
+    return Number(valor || 0).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+  }
+
+  function dataBR(data) {
+    if (!data) return '-';
+    return new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+  }
+
+  function inicioFimMes() {
+    const [ano, mes] = document.getElementById('mes').value.split('-').map(Number);
+
+    const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+
+    const ultimoDia = new Date(ano, mes, 0).getDate();
+    const fim = `${ano}-${String(mes).padStart(2, '0')}-${ultimoDia}`;
+
+    return { inicio, fim };
+  }
+
+  async function verificarSessao() {
+    const { data, error } = await supabaseClient.auth.getSession();
+
+    if (error || !data.session) {
+      location.replace('login.html');
+      return false;
+    }
+
+    const { data: u, error: e } = await supabaseClient
+      .from('usuarios')
+      .select('id,auth_user_id,loja_id,perfil,nome,ativo')
+      .eq('auth_user_id', data.session.user.id)
+      .maybeSingle();
+
+    if (e || !u || u.ativo === false) {
+      await supabaseClient.auth.signOut();
+      location.replace('login.html');
+      return false;
+    }
+
+    if (!['gerente', 'gerente_geral', 'admin_global'].includes(u.perfil)) {
+      location.replace('leitor.html');
+      return false;
+    }
+
+    usuario = u;
+    return true;
+  }
+
+  async function carregar() {
+    const ok = await verificarSessao();
+    if (!ok) return;
+
+    const { inicio, fim } = inicioFimMes();
+
+    const [lojasRes, perdasRes] = await Promise.all([
+      supabaseClient
+        .from('lojas')
+        .select('id,nome,ativo')
+        .order('nome'),
+
+      /*
+       * A tabela "perdas" será criada na próxima etapa.
+       * Campos esperados:
+       * id, produto_id, loja_id, quantidade, data_perda,
+       * cadastrado_por
+       */
+      supabaseClient
+        .from('perdas')
+        .select(`
+          id,
+          produto_id,
+          loja_id,
+          quantidade,
+          data_perda,
+          cadastrado_por,
+          produtos (
+            id,
+            codigo_barras,
+            nome
+          )
+        `)
+        .gte('data_perda', inicio)
+        .lte('data_perda', fim)
+    ]);
+
+    if (lojasRes.error) {
+      mostrarErro('Não foi possível carregar as lojas.');
+      return;
+    }
+
+    lojas = lojasRes.data || [];
+
+    if (perdasRes.error) {
+      /*
+       * A tela continua abrindo mesmo antes da tabela ser criada.
+       */
+      perdas = [];
+      render();
+      mostrarAvisoTabela();
+      return;
+    }
+
+    perdas = perdasRes.data || [];
+
+    render();
+  }
+
+  function render() {
+    let lojasVisiveis = lojas;
+
+    if (usuario.perfil === 'gerente') {
+      lojasVisiveis = lojas.filter(l => l.id === usuario.loja_id);
+    }
+
+    const mapa = {};
+
+    lojasVisiveis.forEach(loja => {
+      mapa[loja.id] = {
+        loja,
+        qtd: 0,
+        valor: 0,
+        itens: []
+      };
+    });
+
+    let qtdTotal = 0;
+    let valorTotal = 0;
+
+    perdas.forEach(p => {
+      if (!mapa[p.loja_id]) return;
+
+      const qtd = Number(p.quantidade || 0);
+      const custo = Number(p.custo_unitario || 0);
+      const valor = qtd * custo;
+
+      mapa[p.loja_id].qtd += qtd;
+      mapa[p.loja_id].valor += valor;
+      mapa[p.loja_id].itens.push(p);
+
+      qtdTotal += qtd;
+      valorTotal += valor;
+    });
+
+    document.getElementById('perdaTotal').textContent = moeda(valorTotal);
+    document.getElementById('qtdTotal').textContent = qtdTotal;
+    document.getElementById('lojasTotal').textContent =
+      Object.values(mapa).filter(x => x.qtd > 0).length;
+
+    const [ano, mes] = document.getElementById('mes').value.split('-');
+    document.getElementById('periodoTexto').textContent =
+      `${mes}/${ano}`;
+
+    const container = document.getElementById('stores');
+    container.innerHTML = '';
+
+    const lista = Object.values(mapa);
+
+    if (!lista.length) {
+      container.innerHTML =
+        '<div class="empty">Nenhuma loja disponível para este usuário.</div>';
+      return;
+    }
+
+    lista.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'store-card';
+
+      div.innerHTML = `
+        <div class="store-name">${escapeHtml(item.loja.nome)}</div>
+        <div class="store-values">
+          <div class="store-value">
+            <strong>${item.qtd}</strong>
+            <span>unidades</span>
+          </div>
+          <div class="store-value">
+            <strong>${moeda(item.valor)}</strong>
+            <span>prejuízo</span>
+          </div>
+        </div>
+      `;
+
+      div.onclick = () => abrirDetalhe(item.loja.id);
+      container.appendChild(div);
+    });
+  }
+
+  function abrirDetalhe(lojaId) {
+    lojaSelecionada = lojaId;
+
+    const loja = lojas.find(l => l.id === lojaId);
+    if (!loja) return;
+
+    const itens = perdas.filter(p => p.loja_id === lojaId);
+
+    document.getElementById('detailTitle').textContent =
+      loja.nome;
+
+    document.getElementById('detailInfo').textContent =
+      `${itens.length} registro(s) de perda`;
+
+    const body = document.getElementById('detailBody');
+    body.innerHTML = '';
+
+    if (!itens.length) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align:center;color:#777;">
+            Nenhuma perda registrada neste período.
+          </td>
+        </tr>
+      `;
+    } else {
+      itens.forEach(p => {
+        const qtd = Number(p.quantidade || 0);
+        const custo = Number(p.custo_unitario || 0);
+        const valor = qtd * custo;
+
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(p.produtos?.nome || 'Produto')}</strong></td>
+          <td>${escapeHtml(p.produtos?.codigo_barras || '-')}</td>
+          <td>${qtd}</td>
+          <td>${moeda(custo)}</td>
+          <td class="money">${moeda(valor)}</td>
+          <td>${dataBR(p.data_perda)}</td>
+        `;
+
+        body.appendChild(tr);
+      });
+    }
+
+    const detail = document.getElementById('detail');
+    detail.style.display = 'block';
+    detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function fecharDetalhe() {
+    document.getElementById('detail').style.display = 'none';
+  }
+
+  function mostrarAba(aba) {
+    const relatorio = document.getElementById('relatorio');
+    const custos = document.getElementById('custos');
+
+    const tabRelatorio = document.getElementById('tabRelatorio');
+    const tabCustos = document.getElementById('tabCustos');
+
+    if (aba === 'custos') {
+      relatorio.style.display = 'none';
+      custos.style.display = 'block';
+      tabRelatorio.classList.remove('active');
+      tabCustos.classList.add('active');
+    } else {
+      relatorio.style.display = 'block';
+      custos.style.display = 'none';
+      tabCustos.classList.remove('active');
+      tabRelatorio.classList.add('active');
+    }
+  }
+
+  async function salvarCusto() {
+    const busca = document.getElementById('buscaProduto').value.trim();
+    const custo = Number(document.getElementById('custoProduto').value);
+
+    if (!busca) {
+      alert('Digite o código ou nome do produto.');
+      return;
+    }
+
+    if (!Number.isFinite(custo) || custo < 0) {
+      alert('Informe um custo válido.');
+      return;
+    }
+
+    /*
+     * A gravação dos custos será ligada à tabela de custos
+     * quando definirmos a estrutura do banco.
+     */
+    document.getElementById('resultadoProduto').innerHTML = `
+      <div class="notice">
+        Produto pesquisado: <strong>${escapeHtml(busca)}</strong><br>
+        Custo informado: <strong>${moeda(custo)}</strong><br><br>
+        A estrutura de custos do Supabase ainda será conectada na próxima etapa.
+      </div>
+    `;
+  }
+
+  function mostrarAvisoTabela() {
+    document.getElementById('stores').innerHTML = `
+      <div class="empty">
+        A tela está pronta.<br><br>
+        <strong>A tabela de perdas ainda não foi criada no Supabase.</strong><br>
+        Na próxima etapa vamos criar a tabela e ligar o registro automático das perdas.
+      </div>
+    `;
+  }
+
+  function mostrarErro(msg) {
+    document.getElementById('stores').innerHTML =
+      `<div class="empty">${escapeHtml(msg)}</div>`;
+  }
+
+  function escapeHtml(valor) {
+    return String(valor ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  carregar();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+</script>
+
+</body>
+</html>
