@@ -698,7 +698,16 @@ function statusFor(days){
 
     return {
       kind:'expired',
-      label:'VENCIDO'
+      label:'Vencido'
+    };
+
+  }
+
+  if(days === 0){
+
+    return {
+      kind:'warning',
+      label:'Vence hoje'
     };
 
   }
@@ -1222,6 +1231,95 @@ async function deleteRecord(){
   }
 
 
+  /*
+     REGRA DE PERDAS:
+     - Vence hoje (0 dias): ainda não é perda.
+     - Vencido (< 0 dias): pergunta a quantidade perdida.
+     - Quantidade 0: exclui normalmente, sem registrar perda.
+     - Quantidade > 0: registra em "perdas" e depois exclui a validade.
+  */
+  const days = daysUntil(record.validade);
+  let quantidadePerdida = 0;
+
+  if(days !== null && days < 0){
+
+    const resposta = prompt(
+      `Este produto está vencido.\n\n` +
+      `Quantidade perdida de ${getProductName(record)}?\n` +
+      `Digite 0 se não houve perda.`
+    );
+
+    // Cancelar o prompt cancela também a exclusão.
+    if(resposta === null){
+      return;
+    }
+
+    const valor = resposta.trim();
+
+    if(valor === ''){
+      alert('Informe a quantidade perdida. Digite 0 se não houve perda.');
+      return;
+    }
+
+    quantidadePerdida = Number(valor);
+
+    if(
+      !Number.isInteger(quantidadePerdida) ||
+      quantidadePerdida < 0
+    ){
+      alert('Informe uma quantidade inteira igual ou maior que 0.');
+      return;
+    }
+  }
+
+
+  let perdaCriadaId = null;
+
+  // Só cria perda quando a validade já venceu E a quantidade é maior que zero.
+  if(days !== null && days < 0 && quantidadePerdida > 0){
+
+    const hoje = new Date();
+    const dataPerda =
+      hoje.getFullYear() + '-' +
+      String(hoje.getMonth() + 1).padStart(2,'0') + '-' +
+      String(hoje.getDate()).padStart(2,'0');
+
+    const {
+      data: perdaCriada,
+      error: perdaError
+    } = await supabaseClient
+      .from('perdas')
+      .insert({
+        produto_id:record.produto_id,
+        loja_id:record.loja_id,
+        validade_id:record.id,
+        quantidade:quantidadePerdida,
+        data_perda:dataPerda,
+        custo:null,
+        criado_por:currentUsuarioId
+      })
+      .select('id')
+      .maybeSingle();
+
+    if(perdaError){
+
+      console.error(
+        'Erro ao registrar perda:',
+        perdaError
+      );
+
+      alert(
+        'Não foi possível registrar a perda. A validade não foi excluída.\n\n' +
+        perdaError.message
+      );
+
+      return;
+    }
+
+    perdaCriadaId = perdaCriada?.id || null;
+  }
+
+
   const {
     error
   } = await supabaseClient
@@ -1243,6 +1341,24 @@ async function deleteRecord(){
       'Erro ao excluir validade:',
       error
     );
+
+    // Se a perda foi criada mas a validade não pôde ser excluída,
+    // tenta desfazer o registro da perda para não duplicar dados.
+    if(perdaCriadaId){
+
+      const {error:rollbackError} =
+        await supabaseClient
+          .from('perdas')
+          .delete()
+          .eq('id',perdaCriadaId);
+
+      if(rollbackError){
+        console.error(
+          'Não foi possível desfazer o registro de perda:',
+          rollbackError
+        );
+      }
+    }
 
     alert(
       'Não foi possível excluir o registro.\n\n' +
@@ -1266,6 +1382,7 @@ async function deleteRecord(){
   render();
 
 }
+
 
 
 /* =========================================================
