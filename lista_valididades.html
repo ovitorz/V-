@@ -1234,8 +1234,9 @@ async function deleteRecord(){
 
   /*
     REGRA:
-    - Vence hoje / faltam 1, 2 ou 3 dias: exclusão normal.
-    - Vencido: SEMPRE perguntar a quantidade vencida.
+    - Vence hoje / faltam dias: exclusão normal.
+    - Vencido: usa o campo "Informe a quantidade vencida" que já está
+      visível no próprio modal (sem prompt() extra do navegador).
     - Quantidade 0: não registra perda, mas permite excluir.
     - Quantidade > 0: registra em perdas e depois exclui a validade.
   */
@@ -1246,27 +1247,12 @@ async function deleteRecord(){
 
   if(isExpired){
 
-    /*
-      Usa prompt de propósito aqui:
-      a quantidade é solicitada SOMENTE quando o usuário
-      clica em EXCLUIR. Assim não depende de campo oculto
-      no modal ou de CSS para aparecer.
-    */
-    const resposta = prompt(
-      `⚠️ PRODUTO VENCIDO\n\n` +
-      `${getProductName(record)}\n\n` +
-      `Informe a quantidade vencida:`
-    );
-
-    // Cancelar = não excluir nada
-    if(resposta === null){
-      return;
-    }
-
-    const raw = String(resposta).trim();
+    const lossInput = document.getElementById('lossQuantity');
+    const raw = lossInput.value.trim();
 
     if(raw === ''){
       alert('Informe a quantidade vencida.');
+      lossInput.focus();
       return;
     }
 
@@ -1277,6 +1263,7 @@ async function deleteRecord(){
       quantidadePerdida < 0
     ){
       alert('Informe uma quantidade inteira igual ou maior que zero.');
+      lossInput.focus();
       return;
     }
 
