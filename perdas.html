@@ -40,7 +40,7 @@ th{color:#6b7280;font-size:12px;text-transform:uppercase}
 .cost-row .product{font-weight:700}
 .cost-row .stores{font-size:12px;color:#6b7280;margin-top:3px}
 .cost-input{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px}
-.cost-status{font-size:13px;color:#6b7280}
+.cost-status{font-size:13px;color:#6b7280}.actions{display:flex;gap:7px;flex-wrap:wrap}.btn.secondary{background:#fff;color:#111827;border:1px solid #d1d5db}.btn.danger{background:#b91c1c}.btn.smallbtn{padding:8px 10px;font-size:13px}
 .btn{border:0;background:#111827;color:#fff;border-radius:8px;padding:10px 13px;font-weight:700;cursor:pointer}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .saved{color:#166534;font-weight:700}
@@ -239,12 +239,13 @@ function showStore(store,arr){
   detail.innerHTML=`
     <h2>${store} — ${brl(value)}</h2>
     <table>
-      <thead><tr><th>Produto</th><th>Data</th><th>Qtd.</th><th>Custo</th><th>Perda</th></tr></thead>
+      <thead><tr><th>Produto</th><th>Data</th><th>Qtd.</th><th>Custo</th><th>Perda</th><th>Ações</th></tr></thead>
       <tbody>
         ${arr.map(x=>`<tr>
           <td>${x.product}</td><td>${fmtDate(x.date)}</td><td>${x.qty}</td>
           <td>${x.cost==null?'Pendente':brl(x.cost)}</td>
           <td>${x.cost==null?'Pendente':brl(x.qty*x.cost)}</td>
+          <td><button class="btn danger smallbtn" onclick="event.stopPropagation(); deleteLoss(${x.id})">Excluir</button></td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -272,11 +273,45 @@ function renderCosts(data){
       <div><div class="product">${g.product}</div><div class="stores">${g.stores.join(', ')}</div></div>
       <div><div class="small">Unidades</div><strong>${g.qty}</strong></div>
       <div><div class="small">Custo unitário</div><input id="cost_${i}" class="cost-input" type="number" min="0" step="0.01" placeholder="R$ 0,00" value="${saved?g.cost:''}" ${saved?'disabled':''}></div>
-      <div><button class="btn" onclick="saveCost(${i})" ${saved?'disabled':''}>${saved?'Salvo':'Salvar'}</button><div id="status_${i}" class="cost-status ${saved?'saved':''}">${saved?'Aplicado às lojas':''}</div></div>
+      <div class="actions">
+        <button id="costBtn_${i}" class="btn ${saved?'secondary':''}" onclick="${saved?`editCost(${i})`:`saveCost(${i})`}">${saved?'Editar':'Salvar'}</button>
+        ${saved?`<button id="costSave_${i}" class="btn" style="display:none" onclick="saveCost(${i})">Salvar</button>`:''}
+        <div id="status_${i}" class="cost-status ${saved?'saved':''}">${saved?'Aplicado às lojas':''}</div>
+      </div>
     </div>`;
   }).join('');
 
   window.costGroups=arr;
+}
+
+function editCost(i){
+  const input=document.getElementById('cost_'+i);
+  const btn=document.getElementById('costBtn_'+i);
+  const saveBtn=document.getElementById('costSave_'+i);
+  if(!input) return;
+  input.disabled=false;
+  input.focus();
+  input.select();
+  if(btn) btn.style.display='none';
+  if(saveBtn) saveBtn.style.display='inline-flex';
+  const status=document.getElementById('status_'+i);
+  if(status){ status.textContent='Edite o custo e clique em Salvar'; status.className='cost-status'; }
+}
+
+async function deleteLoss(id){
+  const item=lossData.find(x=>String(x.id)===String(id));
+  if(!item) return;
+  if(!confirm(`Excluir o registro de perda de ${item.product} (${item.qty} unidade(s))?`)) return;
+
+  const {error}=await supabaseClient.from('perdas').delete().eq('id',item.id);
+  if(error){
+    console.error('Erro ao excluir perda:',error);
+    alert('Não foi possível excluir o registro de perda.');
+    return;
+  }
+
+  lossData=lossData.filter(x=>String(x.id)!==String(id));
+  render();
 }
 
 async function saveCost(i){
