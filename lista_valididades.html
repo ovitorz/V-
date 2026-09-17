@@ -1066,21 +1066,18 @@ function openRecord(record){
 
   const lossWrap = document.getElementById('lossQuantityWrap');
   const lossInput = document.getElementById('lossQuantity');
-
-  // Usa exatamente o mesmo status que aparece no card.
-  // Se estiver "VENCIDO", mostra a quantidade vencida.
-  const isExpired = record._status && record._status.kind === 'expired';
+  const isExpired = record._days !== null && record._days < 0;
 
   lossWrap.style.display = isExpired ? 'block' : 'none';
   lossInput.value = '';
 
-  if(isExpired){
-    lossInput.focus();
-  }
-
   document.getElementById(
     'editModal'
   ).classList.add('open');
+
+  if(isExpired){
+    setTimeout(() => lossInput.focus(), 50);
+  }
 
 }
 
@@ -1228,9 +1225,7 @@ async function deleteRecord(){
 
   const record =
     records.find(
-      r =>
-        String(r.id) ===
-        String(selectedRecordId)
+      r => String(r.id) === String(selectedRecordId)
     );
 
   if(!record){
@@ -1238,20 +1233,16 @@ async function deleteRecord(){
     return;
   }
 
-  const isExpired =
-    record._status &&
-    record._status.kind === 'expired';
-
+  const isExpired = record._days !== null && record._days < 0;
   let quantidadePerdida = 0;
 
-  // Somente uma validade já vencida pede a quantidade vencida.
   if(isExpired){
     const input = document.getElementById('lossQuantity');
-    const raw = String(input.value ?? '').trim();
+    const raw = String(input?.value ?? '').trim();
 
     if(raw === ''){
-      alert('Informe a quantidade vencida.');
-      input.focus();
+      alert('Informe a quantidade vencida antes de excluir.');
+      input?.focus();
       return;
     }
 
@@ -1259,7 +1250,7 @@ async function deleteRecord(){
 
     if(!Number.isInteger(quantidadePerdida) || quantidadePerdida < 0){
       alert('Informe uma quantidade inteira igual ou maior que zero.');
-      input.focus();
+      input?.focus();
       return;
     }
   }else{
@@ -1270,7 +1261,6 @@ async function deleteRecord(){
 
   let perdaCriadaId = null;
 
-  // Se a quantidade vencida for maior que zero, registra a perda antes da exclusão.
   if(isExpired && quantidadePerdida > 0){
     const {data:perda,error:perdaError} = await supabaseClient
       .from('perdas')
@@ -1287,10 +1277,7 @@ async function deleteRecord(){
 
     if(perdaError){
       console.error('Erro ao registrar perda:', perdaError);
-      alert(
-        'Não foi possível registrar a quantidade vencida.\n\n' +
-        perdaError.message
-      );
+      alert('Não foi possível registrar a quantidade vencida.\n\n' + perdaError.message);
       return;
     }
 
@@ -1306,7 +1293,6 @@ async function deleteRecord(){
   if(error){
     console.error('Erro ao excluir validade:', error);
 
-    // Evita deixar uma perda registrada se a exclusão da validade falhar.
     if(perdaCriadaId){
       const {error:rollbackError} = await supabaseClient
         .from('perdas')
@@ -1318,25 +1304,17 @@ async function deleteRecord(){
       }
     }
 
-    alert(
-      'Não foi possível excluir o registro.\n\n' +
-      error.message
-    );
+    alert('Não foi possível excluir o registro.\n\n' + error.message);
     return;
   }
 
-  records =
-    records.filter(
-      r =>
-        String(r.id) !==
-        String(record.id)
-    );
+  records = records.filter(
+    r => String(r.id) !== String(record.id)
+  );
 
   closeRecordModal();
   render();
-
 }
-
 
 /* =========================================================
    RENDER
