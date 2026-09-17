@@ -35,13 +35,22 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;colo
 <body>
 <aside class="sidebar">
   <div class="logo">Valida<span>+</span></div>
+
   <nav class="nav">
     <button class="active" onclick="location.href='dashboard.html'">◉ &nbsp; Dashboard</button>
     <button onclick="location.href='lista_valididades.html'">▣ &nbsp; Validades</button>
+
+    <!-- NOVO: BOTÃO PERDAS -->
+    <button onclick="location.href='perdas.html'">📉 &nbsp; Perdas</button>
+
     <button onclick="document.getElementById('produtoBusca').focus()">⌕ &nbsp; Consultar produto</button>
     <button onclick="location.href='leitor.html'">▣ &nbsp; Ler código</button>
   </nav>
-  <div class="account"><strong id="accountName">Carregando...</strong><small id="accountRole"></small></div>
+
+  <div class="account">
+    <strong id="accountName">Carregando...</strong>
+    <small id="accountRole"></small>
+  </div>
 </aside>
 
 <main class="main">
@@ -55,17 +64,42 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;colo
   </header>
 
   <section class="cards">
-    <div class="card"><div class="label">Total de validades</div><div class="number" id="total">—</div><div class="note" id="totalNote">Carregando</div></div>
-    <div class="card"><div class="label">Vencidas</div><div class="number" id="expired">—</div><div class="note">Precisam de atenção</div></div>
-    <div class="card"><div class="label">Vencem em até 7 dias</div><div class="number" id="next7">—</div><div class="note">Acompanhar de perto</div></div>
-    <div class="card"><div class="label">Dentro da validade</div><div class="number" id="valid">—</div><div class="note">Sem alerta imediato</div></div>
+    <div class="card">
+      <div class="label">Total de validades</div>
+      <div class="number" id="total">—</div>
+      <div class="note" id="totalNote">Carregando</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Vencidas</div>
+      <div class="number" id="expired">—</div>
+      <div class="note">Precisam de atenção</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Vencem em até 7 dias</div>
+      <div class="number" id="next7">—</div>
+      <div class="note">Acompanhar de perto</div>
+    </div>
+
+    <div class="card">
+      <div class="label">Dentro da validade</div>
+      <div class="number" id="valid">—</div>
+      <div class="note">Sem alerta imediato</div>
+    </div>
   </section>
 
   <section class="grid">
     <div class="panel">
-      <div class="panel-title"><div><h2>🏪 Central de lojas</h2><div class="desc">Resumo das validades por unidade.</div></div></div>
+      <div class="panel-title">
+        <div>
+          <h2>🏪 Central de lojas</h2>
+          <div class="desc">Resumo das validades por unidade.</div>
+        </div>
+      </div>
       <div id="storesBox" class="loading">Carregando lojas...</div>
     </div>
+
     <div class="panel">
       <h2>⚠️ Central de atenção</h2>
       <div class="desc">Os principais pontos que pedem acompanhamento.</div>
@@ -76,7 +110,12 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;colo
   <section class="panel" id="produtoPanel">
     <h2>🔎 Consultar produto</h2>
     <div class="desc">Veja em quais lojas um produto possui validade cadastrada.</div>
-    <div class="search"><input id="produtoBusca" placeholder="Nome ou código de barras"><button class="btn" id="buscarProduto">Consultar</button></div>
+
+    <div class="search">
+      <input id="produtoBusca" placeholder="Nome ou código de barras">
+      <button class="btn" id="buscarProduto">Consultar</button>
+    </div>
+
     <div id="produtoResult" class="product-result"></div>
   </section>
 
@@ -91,13 +130,20 @@ table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;colo
     <div class="desc">Produtos que precisam de atenção imediata.</div>
     <div id="next3Box" class="loading">Carregando...</div>
   </section>
-  <div class="footer-note">Os dados exibidos respeitam as permissões da conta conectada.</div>
+
+  <div class="footer-note">
+    Os dados exibidos respeitam as permissões da conta conectada.
+  </div>
 </main>
 
 <script>
 const SUPABASE_URL='https://siuvsahkjfyzdcrskleg.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_At--bKaS3ZiZA0dmyN5FIQ_5WF735Nl';
-const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+
+const supabaseClient=window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY
+);
 
 let usuario=null, stores=[], records=[];
 
@@ -107,65 +153,180 @@ const roleName={
   gerente_geral:'Gerente geral',
   admin_global:'Administrador global'
 };
-function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
-function dateOnly(s){return new Date(String(s)+'T00:00:00');}
-function today(){const d=new Date();d.setHours(0,0,0,0);return d;}
-function daysFromToday(s){return Math.ceil((dateOnly(s)-today())/86400000);}
+
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,m=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#039;'
+  }[m]));
+}
+
+function dateOnly(s){
+  return new Date(String(s)+'T00:00:00');
+}
+
+function today(){
+  const d=new Date();
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function daysFromToday(s){
+  return Math.ceil((dateOnly(s)-today())/86400000);
+}
+
 function statusFor(s){
   const n=daysFromToday(s);
+
   if(n<0)return ['Vencida','red'];
-  if(n<=3)return [n===0?'Vence hoje':`Vence em ${n} dia${n===1?'':'s'}`,'red'];
-  if(n<=7)return [`${n} dias`,'orange'];
+
+  if(n<=3)
+    return [
+      n===0?'Vence hoje':`Vence em ${n} dia${n===1?'':'s'}`,
+      'red'
+    ];
+
+  if(n<=7)
+    return [`${n} dias`,'orange'];
+
   return ['Normal','green'];
 }
-function storeName(id){const x=stores.find(s=>String(s.id)===String(id));return x?.nome||`Loja ${id}`;}
+
+function storeName(id){
+  const x=stores.find(s=>String(s.id)===String(id));
+  return x?.nome||`Loja ${id}`;
+}
 
 async function session(){
   const {data,error}=await supabaseClient.auth.getSession();
-  if(error||!data.session){location.replace('login.html');return false;}
-  const {data:u,error:e}=await supabaseClient.from('usuarios')
+
+  if(error||!data.session){
+    location.replace('login.html');
+    return false;
+  }
+
+  const {data:u,error:e}=await supabaseClient
+    .from('usuarios')
     .select('id,auth_user_id,loja_id,perfil,nome,ativo')
-    .eq('auth_user_id',data.session.user.id).maybeSingle();
-  if(e||!u||u.ativo===false){await supabaseClient.auth.signOut();location.replace('login.html');return false;}
+    .eq('auth_user_id',data.session.user.id)
+    .maybeSingle();
+
+  if(e||!u||u.ativo===false){
+    await supabaseClient.auth.signOut();
+    location.replace('login.html');
+    return false;
+  }
+
   usuario=u;
-  if(!['gerente','gerente_geral','admin_global'].includes(u.perfil)){location.replace('leitor.html');return false;}
+
+  if(!['gerente','gerente_geral','admin_global'].includes(u.perfil)){
+    location.replace('leitor.html');
+    return false;
+  }
+
   return true;
 }
 
 async function load(){
   const [lr,rr,ur]=await Promise.all([
-    supabaseClient.from('lojas').select('id,nome,ativo').order('nome'),
-    supabaseClient.from('validades').select('id,validade,produto_id,loja_id,cadastrado_por,criado_em,produtos(id,codigo_barras,nome,foto_url,ativo)').order('criado_em',{ascending:false}),
-    supabaseClient.from('usuarios').select('id,nome,email,loja_id,perfil,ativo').order('nome')
+    supabaseClient
+      .from('lojas')
+      .select('id,nome,ativo')
+      .order('nome'),
+
+    supabaseClient
+      .from('validades')
+      .select('id,validade,produto_id,loja_id,cadastrado_por,criado_em,produtos(id,codigo_barras,nome,foto_url,ativo)')
+      .order('criado_em',{ascending:false}),
+
+    supabaseClient
+      .from('usuarios')
+      .select('id,nome,email,loja_id,perfil,ativo')
+      .order('nome')
   ]);
-  if(rr.error){throw rr.error}
+
+  if(rr.error){
+    throw rr.error
+  }
+
   stores=lr.data||[];
+
   const users=ur.data||[];
-  const userMap=new Map(users.map(u=>[String(u.id),u.nome||u.email||`Usuário ${u.id}`]));
-  records=(rr.data||[]).map(r=>({...r,loja_nome:storeName(r.loja_id),criador_nome:userMap.get(String(r.cadastrado_por))||'—'}));
+
+  const userMap=new Map(
+    users.map(u=>[
+      String(u.id),
+      u.nome||u.email||`Usuário ${u.id}`
+    ])
+  );
+
+  records=(rr.data||[]).map(r=>({
+    ...r,
+    loja_nome:storeName(r.loja_id),
+    criador_nome:userMap.get(String(r.cadastrado_por))||'—'
+  }));
+
   render();
 }
 
 function render(){
-  document.getElementById('greeting').textContent=`Olá, ${usuario.nome||'usuário'} 👋`;
-  document.getElementById('roleBadge').textContent=roleName[usuario.perfil]||usuario.perfil;
-  document.getElementById('accountName').textContent=usuario.nome||'Usuário';
-  document.getElementById('accountRole').textContent=roleName[usuario.perfil]||usuario.perfil;
-  document.getElementById('scopeText').textContent=usuario.perfil==='gerente'
-    ? `Visão da ${storeName(usuario.loja_id)}.`
-    : 'Visão consolidada de todas as lojas.';
-  document.getElementById('totalNote').textContent=usuario.perfil==='gerente'?storeName(usuario.loja_id):'Em todas as lojas';
+  document.getElementById('greeting').textContent=
+    `Olá, ${usuario.nome||'usuário'} 👋`;
+
+  document.getElementById('roleBadge').textContent=
+    roleName[usuario.perfil]||usuario.perfil;
+
+  document.getElementById('accountName').textContent=
+    usuario.nome||'Usuário';
+
+  document.getElementById('accountRole').textContent=
+    roleName[usuario.perfil]||usuario.perfil;
+
+  document.getElementById('scopeText').textContent=
+    usuario.perfil==='gerente'
+      ? `Visão da ${storeName(usuario.loja_id)}.`
+      : 'Visão consolidada de todas as lojas.';
+
+  document.getElementById('totalNote').textContent=
+    usuario.perfil==='gerente'
+      ? storeName(usuario.loja_id)
+      : 'Em todas as lojas';
 
   let scoped=records;
-  if(usuario.perfil==='gerente') scoped=records.filter(r=>String(r.loja_id)===String(usuario.loja_id));
 
-  const expired=scoped.filter(r=>daysFromToday(r.validade)<0);
-  const next7=scoped.filter(r=>daysFromToday(r.validade)>=0&&daysFromToday(r.validade)<=7);
-  const valid=scoped.filter(r=>daysFromToday(r.validade)>7);
-  document.getElementById('total').textContent=scoped.length.toLocaleString('pt-BR');
-  document.getElementById('expired').textContent=expired.length.toLocaleString('pt-BR');
-  document.getElementById('next7').textContent=next7.length.toLocaleString('pt-BR');
-  document.getElementById('valid').textContent=valid.length.toLocaleString('pt-BR');
+  if(usuario.perfil==='gerente'){
+    scoped=records.filter(
+      r=>String(r.loja_id)===String(usuario.loja_id)
+    );
+  }
+
+  const expired=scoped.filter(
+    r=>daysFromToday(r.validade)<0
+  );
+
+  const next7=scoped.filter(r=>{
+    const n=daysFromToday(r.validade);
+    return n>=0&&n<=7;
+  });
+
+  const valid=scoped.filter(
+    r=>daysFromToday(r.validade)>7
+  );
+
+  document.getElementById('total').textContent=
+    scoped.length.toLocaleString('pt-BR');
+
+  document.getElementById('expired').textContent=
+    expired.length.toLocaleString('pt-BR');
+
+  document.getElementById('next7').textContent=
+    next7.length.toLocaleString('pt-BR');
+
+  document.getElementById('valid').textContent=
+    valid.length.toLocaleString('pt-BR');
 
   renderStores(scoped);
   renderAttention(scoped);
@@ -175,91 +336,477 @@ function render(){
 
 function renderStores(scoped){
   const box=document.getElementById('storesBox');
-  const rows=stores.filter(s=>s.ativo!==false).map(s=>{
-    const rs=scoped.filter(r=>String(r.loja_id)===String(s.id));
-    const exp=rs.filter(r=>daysFromToday(r.validade)<0).length;
-    const n7=rs.filter(r=>daysFromToday(r.validade)>=0&&daysFromToday(r.validade)<=7).length;
-    return {s,rs,exp,n7};
-  }).filter(x=>usuario.perfil!=='gerente'||String(x.s.id)===String(usuario.loja_id));
-  if(!rows.length){box.innerHTML='<div class="empty">Nenhuma loja disponível.</div>';return;}
-  box.innerHTML=`<table class="clickable"><thead><tr><th>Loja</th><th>Validades</th><th>Vencidas</th><th>≤ 7 dias</th><th></th></tr></thead><tbody>${
-    rows.map(x=>`<tr onclick="filterStore(${x.s.id})"><td><strong>${esc(x.s.nome)}</strong></td><td>${x.rs.length}</td><td>${x.exp?`<span class="badge red">${x.exp}</span>`:'0'}</td><td>${x.n7?`<span class="badge orange">${x.n7}</span>`:'0'}</td><td>›</td></tr>`).join('')
-  }</tbody></table>`;
+
+  const rows=stores
+    .filter(s=>s.ativo!==false)
+    .map(s=>{
+      const rs=scoped.filter(
+        r=>String(r.loja_id)===String(s.id)
+      );
+
+      const exp=rs.filter(
+        r=>daysFromToday(r.validade)<0
+      ).length;
+
+      const n7=rs.filter(r=>{
+        const n=daysFromToday(r.validade);
+        return n>=0&&n<=7;
+      }).length;
+
+      return {s,rs,exp,n7};
+    })
+    .filter(
+      x=>usuario.perfil!=='gerente'||
+      String(x.s.id)===String(usuario.loja_id)
+    );
+
+  if(!rows.length){
+    box.innerHTML=
+      '<div class="empty">Nenhuma loja disponível.</div>';
+    return;
+  }
+
+  box.innerHTML=`
+    <table class="clickable">
+      <thead>
+        <tr>
+          <th>Loja</th>
+          <th>Validades</th>
+          <th>Vencidas</th>
+          <th>≤ 7 dias</th>
+          <th></th>
+        </tr>
+      </thead>
+
+      <tbody>
+        ${
+          rows.map(x=>`
+            <tr onclick="filterStore(${x.s.id})">
+              <td><strong>${esc(x.s.nome)}</strong></td>
+              <td>${x.rs.length}</td>
+              <td>
+                ${
+                  x.exp
+                    ? `<span class="badge red">${x.exp}</span>`
+                    : '0'
+                }
+              </td>
+              <td>
+                ${
+                  x.n7
+                    ? `<span class="badge orange">${x.n7}</span>`
+                    : '0'
+                }
+              </td>
+              <td>›</td>
+            </tr>
+          `).join('')
+        }
+      </tbody>
+    </table>
+  `;
 }
+
 function filterStore(id){
-  location.href=`lista_valididades.html?loja=${encodeURIComponent(id)}`;
+  location.href=
+    `lista_valididades.html?loja=${encodeURIComponent(id)}`;
 }
+
 function renderAttention(scoped){
   const box=document.getElementById('attentionBox');
-  const byStore=stores.map(s=>{
-    const rs=scoped.filter(r=>String(r.loja_id)===String(s.id));
-    return {name:s.nome,exp:rs.filter(r=>daysFromToday(r.validade)<0).length,n7:rs.filter(r=>daysFromToday(r.validade)>=0&&daysFromToday(r.validade)<=7).length};
-  }).filter(x=>x.exp||x.n7).sort((a,b)=>(b.exp*10+b.n7)-(a.exp*10+a.n7));
-  const noValidity=[];
+
+  const byStore=stores
+    .map(s=>{
+      const rs=scoped.filter(
+        r=>String(r.loja_id)===String(s.id)
+      );
+
+      return {
+        name:s.nome,
+        exp:rs.filter(
+          r=>daysFromToday(r.validade)<0
+        ).length,
+        n7:rs.filter(r=>{
+          const n=daysFromToday(r.validade);
+          return n>=0&&n<=7;
+        }).length
+      };
+    })
+    .filter(x=>x.exp||x.n7)
+    .sort(
+      (a,b)=>
+        (b.exp*10+b.n7)-
+        (a.exp*10+a.n7)
+    );
+
   if(byStore.length){
-    box.innerHTML=byStore.slice(0,4).map(x=>{
-      const urgent=x.exp?['red','Urgente',`${x.exp} validade${x.exp===1?'':'s'} vencida${x.exp===1?'':'s'}`]:['orange','Atenção',`${x.n7} vencem em até 7 dias`];
-      return `<div class="alert"><div><strong>${esc(x.name)}</strong><small>${urgent[2]}</small></div><span class="badge ${urgent[0]}">${urgent[1]}</span></div>`;
-    }).join('');
-  }else box.innerHTML='<div class="empty">Nenhum alerta imediato. Tudo sob controle.</div>';
+    box.innerHTML=byStore
+      .slice(0,4)
+      .map(x=>{
+        const urgent=x.exp
+          ? [
+              'red',
+              'Urgente',
+              `${x.exp} validade${x.exp===1?'':'s'} vencida${x.exp===1?'':'s'}`
+            ]
+          : [
+              'orange',
+              'Atenção',
+              `${x.n7} vencem em até 7 dias`
+            ];
+
+        return `
+          <div class="alert">
+            <div>
+              <strong>${esc(x.name)}</strong>
+              <small>${urgent[2]}</small>
+            </div>
+
+            <span class="badge ${urgent[0]}">
+              ${urgent[1]}
+            </span>
+          </div>
+        `;
+      })
+      .join('');
+  }else{
+    box.innerHTML=
+      '<div class="empty">Nenhum alerta imediato. Tudo sob controle.</div>';
+  }
 }
+
 function tableHtml(rows,cols){
-  if(!rows.length)return '<div class="empty">Nenhum registro encontrado.</div>';
-  return `<table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  if(!rows.length)
+    return '<div class="empty">Nenhum registro encontrado.</div>';
+
+  return `
+    <table>
+      <thead>
+        <tr>
+          ${cols.map(c=>`<th>${c}</th>`).join('')}
+        </tr>
+      </thead>
+
+      <tbody>
+        ${rows.join('')}
+      </tbody>
+    </table>
+  `;
 }
+
 function renderRecent(scoped){
-  const rows=scoped.slice().sort((a,b)=>new Date(b.criado_em)-new Date(a.criado_em)).slice(0,8).map(r=>{
-    const [st,cl]=statusFor(r.validade);
-    return `<tr><td><strong>${esc(r.produtos?.nome||'Produto sem nome')}</strong><div class="code">${esc(r.produtos?.codigo_barras||'')}</div></td><td>${esc(r.loja_nome)}</td><td>${esc(r.criador_nome)}</td><td>${new Date(r.validade+'T00:00:00').toLocaleDateString('pt-BR')} <span class="badge ${cl}">${st}</span></td></tr>`;
-  });
-  document.getElementById('recentBox').innerHTML=tableHtml(rows,['Produto','Loja','Cadastrado por','Validade']);
+  const rows=scoped
+    .slice()
+    .sort(
+      (a,b)=>
+        new Date(b.criado_em)-
+        new Date(a.criado_em)
+    )
+    .slice(0,8)
+    .map(r=>{
+      const [st,cl]=statusFor(r.validade);
+
+      return `
+        <tr>
+          <td>
+            <strong>
+              ${esc(r.produtos?.nome||'Produto sem nome')}
+            </strong>
+
+            <div class="code">
+              ${esc(r.produtos?.codigo_barras||'')}
+            </div>
+          </td>
+
+          <td>${esc(r.loja_nome)}</td>
+
+          <td>${esc(r.criador_nome)}</td>
+
+          <td>
+            ${new Date(
+              r.validade+'T00:00:00'
+            ).toLocaleDateString('pt-BR')}
+
+            <span class="badge ${cl}">
+              ${st}
+            </span>
+          </td>
+        </tr>
+      `;
+    });
+
+  document.getElementById('recentBox').innerHTML=
+    tableHtml(
+      rows,
+      ['Produto','Loja','Cadastrado por','Validade']
+    );
 }
+
 function renderNext3(scoped){
-  const rows=scoped.filter(r=>{const n=daysFromToday(r.validade);return n>=0&&n<=3}).sort((a,b)=>dateOnly(a.validade)-dateOnly(b.validade)).slice(0,12).map(r=>{
-    const n=daysFromToday(r.validade);
-    return `<tr><td><strong>${esc(r.produtos?.nome||'Produto sem nome')}</strong><div class="code">${esc(r.produtos?.codigo_barras||'')}</div></td><td>${esc(r.loja_nome)}</td><td>${dateOnly(r.validade).toLocaleDateString('pt-BR')}</td><td><span class="badge red">${n===0?'Hoje':`${n} dia${n===1?'':'s'}`}</span></td></tr>`;
-  });
-  document.getElementById('next3Box').innerHTML=tableHtml(rows,['Produto','Loja','Validade','Situação']);
+  const rows=scoped
+    .filter(r=>{
+      const n=daysFromToday(r.validade);
+      return n>=0&&n<=3;
+    })
+    .sort(
+      (a,b)=>
+        dateOnly(a.validade)-
+        dateOnly(b.validade)
+    )
+    .slice(0,12)
+    .map(r=>{
+      const n=daysFromToday(r.validade);
+
+      return `
+        <tr>
+          <td>
+            <strong>
+              ${esc(r.produtos?.nome||'Produto sem nome')}
+            </strong>
+
+            <div class="code">
+              ${esc(r.produtos?.codigo_barras||'')}
+            </div>
+          </td>
+
+          <td>${esc(r.loja_nome)}</td>
+
+          <td>
+            ${dateOnly(
+              r.validade
+            ).toLocaleDateString('pt-BR')}
+          </td>
+
+          <td>
+            <span class="badge red">
+              ${
+                n===0
+                  ? 'Hoje'
+                  : `${n} dia${n===1?'':'s'}`
+              }
+            </span>
+          </td>
+        </tr>
+      `;
+    });
+
+  document.getElementById('next3Box').innerHTML=
+    tableHtml(
+      rows,
+      ['Produto','Loja','Validade','Situação']
+    );
 }
 
 async function searchProduct(){
-  const q=document.getElementById('produtoBusca').value.trim();
-  const box=document.getElementById('produtoResult');
-  if(!q){box.style.display='none';return;}
-  box.style.display='block';box.innerHTML='<div class="loading">Consultando...</div>';
+  const q=
+    document.getElementById('produtoBusca')
+      .value
+      .trim();
+
+  const box=
+    document.getElementById('produtoResult');
+
+  if(!q){
+    box.style.display='none';
+    return;
+  }
+
+  box.style.display='block';
+  box.innerHTML=
+    '<div class="loading">Consultando...</div>';
+
   const isCode=/^\d+$/.test(q);
-  let query=supabaseClient.from('produtos').select('id,codigo_barras,nome,ativo');
-  if(isCode) query=query.eq('codigo_barras',q);
-  else query=query.ilike('nome',`%${q}%`);
-  const {data:products,error}=await query.limit(10);
-  if(error){box.innerHTML='<div class="empty">Não foi possível consultar o produto.</div>';return;}
-  if(!products?.length){box.innerHTML='<div class="empty">Nenhum produto encontrado.</div>';return;}
-  const allowed=usuario.perfil==='gerente'?records.filter(r=>String(r.loja_id)===String(usuario.loja_id)):records;
-  const html=products.map(p=>{
-    const rs=allowed.filter(r=>String(r.produto_id)===String(p.id));
-    const byStore=new Map();
-    rs.forEach(r=>{
-      const arr=byStore.get(String(r.loja_id))||[];arr.push(r);byStore.set(String(r.loja_id),arr);
-    });
-    let lines=stores.filter(s=>s.ativo!==false && (usuario.perfil!=='gerente'||String(s.id)===String(usuario.loja_id))).map(s=>{
-      const vals=(byStore.get(String(s.id))||[]).sort((a,b)=>dateOnly(a.validade)-dateOnly(b.validade));
-      if(!vals.length)return `<div class="store-line"><span>${esc(s.nome)}</span><span class="badge gray">Sem validade</span></div>`;
-      return vals.map(r=>{const [st,cl]=statusFor(r.validade);return `<div class="store-line"><span>${esc(s.nome)}</span><strong>${dateOnly(r.validade).toLocaleDateString('pt-BR')} <span class="badge ${cl}">${st}</span></strong></div>`}).join('');
-    }).join('');
-    return `<div style="margin-top:12px"><div class="product-head"><div><div class="product-name">${esc(p.nome||'Produto sem nome')}</div><div class="code">Código: ${esc(p.codigo_barras||'—')}</div></div><span class="badge gray">${stores.filter(s=>s.ativo!==false && (usuario.perfil!=='gerente'||String(s.id)===String(usuario.loja_id))).length} lojas</span></div>${lines||'<div class="empty">Nenhuma validade acessível.</div>'}</div>`;
-  }).join('<hr style="border:0;border-top:1px solid #eee;margin:16px 0">');
+
+  let query=
+    supabaseClient
+      .from('produtos')
+      .select('id,codigo_barras,nome,ativo');
+
+  if(isCode)
+    query=query.eq('codigo_barras',q);
+  else
+    query=query.ilike('nome',`%${q}%`);
+
+  const {data:products,error}=
+    await query.limit(10);
+
+  if(error){
+    box.innerHTML=
+      '<div class="empty">Não foi possível consultar o produto.</div>';
+    return;
+  }
+
+  if(!products?.length){
+    box.innerHTML=
+      '<div class="empty">Nenhum produto encontrado.</div>';
+    return;
+  }
+
+  const allowed=
+    usuario.perfil==='gerente'
+      ? records.filter(
+          r=>String(r.loja_id)===String(usuario.loja_id)
+        )
+      : records;
+
+  const html=products
+    .map(p=>{
+      const rs=allowed.filter(
+        r=>String(r.produto_id)===String(p.id)
+      );
+
+      const byStore=new Map();
+
+      rs.forEach(r=>{
+        const arr=
+          byStore.get(String(r.loja_id))||[];
+
+        arr.push(r);
+
+        byStore.set(
+          String(r.loja_id),
+          arr
+        );
+      });
+
+      let lines=
+        stores
+          .filter(
+            s=>
+              s.ativo!==false &&
+              (
+                usuario.perfil!=='gerente'||
+                String(s.id)===String(usuario.loja_id)
+              )
+          )
+          .map(s=>{
+            const vals=
+              (
+                byStore.get(String(s.id))||[]
+              )
+              .sort(
+                (a,b)=>
+                  dateOnly(a.validade)-
+                  dateOnly(b.validade)
+              );
+
+            if(!vals.length){
+              return `
+                <div class="store-line">
+                  <span>${esc(s.nome)}</span>
+                  <span class="badge gray">
+                    Sem validade
+                  </span>
+                </div>
+              `;
+            }
+
+            return vals
+              .map(r=>{
+                const [st,cl]=
+                  statusFor(r.validade);
+
+                return `
+                  <div class="store-line">
+                    <span>${esc(s.nome)}</span>
+
+                    <strong>
+                      ${
+                        dateOnly(
+                          r.validade
+                        ).toLocaleDateString('pt-BR')
+                      }
+
+                      <span class="badge ${cl}">
+                        ${st}
+                      </span>
+                    </strong>
+                  </div>
+                `;
+              })
+              .join('');
+          })
+          .join('');
+
+      return `
+        <div style="margin-top:12px">
+
+          <div class="product-head">
+            <div>
+              <div class="product-name">
+                ${esc(p.nome||'Produto sem nome')}
+              </div>
+
+              <div class="code">
+                Código: ${esc(p.codigo_barras||'—')}
+              </div>
+            </div>
+
+            <span class="badge gray">
+              ${
+                stores.filter(
+                  s=>
+                    s.ativo!==false &&
+                    (
+                      usuario.perfil!=='gerente'||
+                      String(s.id)===String(usuario.loja_id)
+                    )
+                ).length
+              } lojas
+            </span>
+          </div>
+
+          ${
+            lines||
+            '<div class="empty">Nenhuma validade acessível.</div>'
+          }
+
+        </div>
+      `;
+    })
+    .join(
+      '<hr style="border:0;border-top:1px solid #eee;margin:16px 0">'
+    );
+
   box.innerHTML=html;
 }
 
-document.getElementById('buscarProduto').addEventListener('click',searchProduct);
-document.getElementById('produtoBusca').addEventListener('keydown',e=>{if(e.key==='Enter')searchProduct();});
-(async()=>{try{if(await session())await load();}catch(e){console.error(e);document.getElementById('scopeText').textContent='Não foi possível carregar os dados.';}})();
+document
+  .getElementById('buscarProduto')
+  .addEventListener(
+    'click',
+    searchProduct
+  );
+
+document
+  .getElementById('produtoBusca')
+  .addEventListener(
+    'keydown',
+    e=>{
+      if(e.key==='Enter')
+        searchProduct();
+    }
+  );
+
+(async()=>{
+  try{
+    if(await session())
+      await load();
+  }catch(e){
+    console.error(e);
+
+    document.getElementById('scopeText').textContent=
+      'Não foi possível carregar os dados.';
+  }
+})();
 </script>
 
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    navigator.serviceWorker
+      .register('./service-worker.js')
+      .catch(() => {});
   });
 }
 </script>
