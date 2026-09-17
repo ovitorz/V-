@@ -344,6 +344,21 @@
       type="date"
     >
 
+    <div id="lossQuantityWrap" style="display:none;margin-top:14px;text-align:left;">
+      <label for="lossQuantity" style="display:block;font-weight:700;margin-bottom:7px;">
+        Informe a quantidade vencida:
+      </label>
+      <input
+        id="lossQuantity"
+        type="number"
+        min="0"
+        step="1"
+        inputmode="numeric"
+        placeholder="Quantidade"
+        style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #d1d5db;border-radius:8px;font-size:16px;"
+      >
+    </div>
+
     <div class="modal-actions">
       <button class="btn-save-date" id="modalSave">
         SALVAR DATA
@@ -698,16 +713,7 @@ function statusFor(days){
 
     return {
       kind:'expired',
-      label:'Vencido'
-    };
-
-  }
-
-  if(days === 0){
-
-    return {
-      kind:'warning',
-      label:'Vence hoje'
+      label:'VENCIDO'
     };
 
   }
@@ -1058,6 +1064,18 @@ function openRecord(record){
   ).value =
     record.validade || '';
 
+  const lossWrap = document.getElementById('lossQuantityWrap');
+  const lossInput = document.getElementById('lossQuantity');
+  const isExpired = record._days !== null && record._days < 0;
+
+  if(isExpired){
+    lossWrap.style.display = 'block';
+    lossInput.value = '';
+  }else{
+    lossWrap.style.display = 'none';
+    lossInput.value = '';
+  }
+
   document.getElementById(
     'editModal'
   ).classList.add('open');
@@ -1214,149 +1232,87 @@ async function deleteRecord(){
     );
 
   if(!record){
-
     closeRecordModal();
-
     return;
   }
 
+  const isExpired =
+    record._days !== null &&
+    record._days < 0;
 
-  if(
-    !confirm(
-      `Excluir a validade de ${getProductName(record)}?`
-    )
-  ){
-
-    return;
-  }
-
-
-  /*
-     REGRA DE PERDAS:
-     - Vence hoje (0 dias): ainda não é perda.
-     - Vencido (< 0 dias): pergunta a quantidade perdida.
-     - Quantidade 0: exclui normalmente, sem registrar perda.
-     - Quantidade > 0: registra em "perdas" e depois exclui a validade.
-  */
-  const days = daysUntil(record.validade);
   let quantidadePerdida = 0;
 
-  if(days !== null && days < 0){
+  // Somente uma validade já vencida pede a quantidade vencida.
+  if(isExpired){
+    const input = document.getElementById('lossQuantity');
+    const raw = String(input.value ?? '').trim();
 
-    const resposta = prompt(
-      `Este produto está vencido.\n\n` +
-      `Quantidade perdida de ${getProductName(record)}?\n` +
-      `Digite 0 se não houve perda.`
-    );
-
-    // Cancelar o prompt cancela também a exclusão.
-    if(resposta === null){
+    if(raw === ''){
+      alert('Informe a quantidade vencida.');
+      input.focus();
       return;
     }
 
-    const valor = resposta.trim();
+    quantidadePerdida = Number(raw);
 
-    if(valor === ''){
-      alert('Informe a quantidade perdida. Digite 0 se não houve perda.');
+    if(!Number.isInteger(quantidadePerdida) || quantidadePerdida < 0){
+      alert('Informe uma quantidade inteira igual ou maior que zero.');
+      input.focus();
       return;
     }
-
-    quantidadePerdida = Number(valor);
-
-    if(
-      !Number.isInteger(quantidadePerdida) ||
-      quantidadePerdida < 0
-    ){
-      alert('Informe uma quantidade inteira igual ou maior que 0.');
+  }else{
+    if(!confirm(`Excluir a validade de ${getProductName(record)}?`)){
       return;
     }
   }
-
 
   let perdaCriadaId = null;
 
-  // Só cria perda quando a validade já venceu E a quantidade é maior que zero.
-  if(days !== null && days < 0 && quantidadePerdida > 0){
-
-    const hoje = new Date();
-    const dataPerda =
-      hoje.getFullYear() + '-' +
-      String(hoje.getMonth() + 1).padStart(2,'0') + '-' +
-      String(hoje.getDate()).padStart(2,'0');
-
-    const {
-      data: perdaCriada,
-      error: perdaError
-    } = await supabaseClient
+  // Se a quantidade vencida for maior que zero, registra a perda antes da exclusão.
+  if(isExpired && quantidadePerdida > 0){
+    const {data:perda,error:perdaError} = await supabaseClient
       .from('perdas')
       .insert({
-        produto_id:record.produto_id,
-        loja_id:record.loja_id,
-        validade_id:record.id,
-        quantidade:quantidadePerdida,
-        data_perda:dataPerda,
-        custo:null,
-        criado_por:currentUsuarioId
+        produto_id: record.produto_id,
+        loja_id: record.loja_id,
+        validade_id: record.id,
+        quantidade: quantidadePerdida,
+        data_perda: new Date().toISOString().slice(0,10),
+        criado_por: currentUsuarioId
       })
       .select('id')
-      .maybeSingle();
+      .single();
 
     if(perdaError){
-
-      console.error(
-        'Erro ao registrar perda:',
-        perdaError
-      );
-
+      console.error('Erro ao registrar perda:', perdaError);
       alert(
-        'Não foi possível registrar a perda. A validade não foi excluída.\n\n' +
+        'Não foi possível registrar a quantidade vencida.\n\n' +
         perdaError.message
       );
-
       return;
     }
 
-    perdaCriadaId = perdaCriada?.id || null;
+    perdaCriadaId = perda?.id ?? null;
   }
 
-
-  const {
-    error
-  } = await supabaseClient
+  const {error} = await supabaseClient
     .from('validades')
     .delete()
-    .eq(
-      'id',
-      record.id
-    )
-    .eq(
-      'loja_id',
-      record.loja_id
-    );
-
+    .eq('id', record.id)
+    .eq('loja_id', record.loja_id);
 
   if(error){
+    console.error('Erro ao excluir validade:', error);
 
-    console.error(
-      'Erro ao excluir validade:',
-      error
-    );
-
-    // Se a perda foi criada mas a validade não pôde ser excluída,
-    // tenta desfazer o registro da perda para não duplicar dados.
+    // Evita deixar uma perda registrada se a exclusão da validade falhar.
     if(perdaCriadaId){
-
-      const {error:rollbackError} =
-        await supabaseClient
-          .from('perdas')
-          .delete()
-          .eq('id',perdaCriadaId);
+      const {error:rollbackError} = await supabaseClient
+        .from('perdas')
+        .delete()
+        .eq('id', perdaCriadaId);
 
       if(rollbackError){
-        console.error(
-          'Não foi possível desfazer o registro de perda:',
-          rollbackError
-        );
+        console.error('Erro ao desfazer perda criada:', rollbackError);
       }
     }
 
@@ -1364,10 +1320,8 @@ async function deleteRecord(){
       'Não foi possível excluir o registro.\n\n' +
       error.message
     );
-
     return;
   }
-
 
   records =
     records.filter(
@@ -1376,13 +1330,10 @@ async function deleteRecord(){
         String(record.id)
     );
 
-
   closeRecordModal();
-
   render();
 
 }
-
 
 
 /* =========================================================
