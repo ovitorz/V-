@@ -1,4 +1,4 @@
-const CACHE_NAME = 'validades-app-v1';
+const CACHE_NAME = 'validades-app-v2';
 
 const APP_SHELL = [
   './login.html',
@@ -40,6 +40,32 @@ self.addEventListener('fetch', event => {
   // Não intercepta APIs externas, Supabase, câmera ou CDN.
   if (new URL(request.url).origin !== self.location.origin) return;
 
+  const isHTML =
+    request.mode === 'navigate' ||
+    request.destination === 'document' ||
+    request.url.endsWith('.html');
+
+  if (isHTML) {
+    // Network-first: sempre tenta buscar a versão mais nova.
+    // Só cai pro cache se estiver offline.
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(request).then(cached => cached || caches.match('./login.html'))
+        )
+    );
+    return;
+  }
+
+  // Demais arquivos (ícones, manifest, css, js estático): cache-first,
+  // como antes — eles mudam pouco e isso deixa o app rápido offline.
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
