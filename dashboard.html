@@ -237,15 +237,23 @@ async function load(){
       .select('id,nome,ativo')
       .order('nome'),
 
-    supabaseClient
-      .from('validades')
-      .select('id,validade,produto_id,loja_id,cadastrado_por,criado_em,produtos(id,codigo_barras,nome,foto_url,ativo)')
-      .order('criado_em',{ascending:false}),
+    (()=>{
+      let q=supabaseClient
+        .from('validades')
+        .select('id,validade,produto_id,loja_id,cadastrado_por,criado_em,produtos(id,codigo_barras,nome,foto_url,ativo)')
+        .order('criado_em',{ascending:false});
+      if(usuario.perfil==='gerente') q=q.eq('loja_id',usuario.loja_id);
+      return q;
+    })(),
 
-    supabaseClient
-      .from('usuarios')
-      .select('id,nome,email,loja_id,perfil,ativo')
-      .order('nome')
+    (()=>{
+      let q=supabaseClient
+        .from('usuarios')
+        .select('id,nome,email,loja_id,perfil,ativo')
+        .order('nome');
+      if(usuario.perfil==='gerente') q=q.eq('loja_id',usuario.loja_id);
+      return q;
+    })()
   ]);
 
   if(rr.error){
