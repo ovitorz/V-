@@ -305,96 +305,19 @@ async function getProductByCode(codigo){
   const code=normalize(codigo);
   if(!code) return null;
 
-  // 1) Cache da sessão
+  /*
+    FONTE PRINCIPAL:
+    O Supabase é a base oficial dos produtos.
+    A Kodebar serve apenas para completar o que estiver faltando.
+  */
+
+  // 1) Cache da sessão — evita consultas repetidas e mantém o leitor rápido.
   const cached=productCache.get(code);
-  if(cached){
-    // Se já temos nome e foto, não consulta nada.
-    if(cached.nome && cached.foto_url) return cached;
+  if(cached && cached.id && cached.nome && cached.foto_url){
+    return cached;
   }
 
-  // 2) Catálogo fixo
-  const fixedProduct=byCode.get(code);
-  if(fixedProduct){
-    const localProduct={
-      codigo:code,
-      nome:fixedProduct.nome,
-      foto_url:''
-    };
-    productCache.set(code,localProduct);
-
-    // Tenta atualizar foto/nome no Supabase em segundo plano.
-    supabaseClient
-      .from('produtos')
-      .select('id,codigo_barras,nome,foto_url,ativo')
-      .eq('codigo_barras',code)
-      .eq('ativo',true)
-      .limit(1)
-      .maybeSingle()
-      .then(async ({data,error})=>{
-        if(error || !data) return;
-
-        let foto=data.foto_url || '';
-        let nome=data.nome || localProduct.nome;
-
-        if(!foto){
-          const kb=await buscarNoKodebar(code);
-          if(kb?.foto_url) foto=kb.foto_url;
-          if(!data.nome && kb?.nome) nome=kb.nome;
-        }
-
-        productCache.set(code,{
-          id:data.id,
-          codigo:normalize(data.codigo_barras),
-          nome,
-          foto_url:foto
-        });
-
-        if(selected && normalize(selected.codigo)===code){
-          selected={
-            id:data.id,
-            codigo:normalize(data.codigo_barras),
-            nome,
-            foto_url:foto
-          };
-          renderProduct();
-        }
-      })
-      .catch(()=>{});
-
-    return localProduct;
-  }
-
-  // 3) Catálogo local antigo
-  const catalogProduct=readProductCatalog().find(
-    p=>normalize(p.codigo)===code
-  );
-
-  if(catalogProduct && catalogProduct.nome){
-    const localProduct={
-      codigo:code,
-      nome:catalogProduct.nome,
-      foto_url:catalogProduct.foto_url || ''
-    };
-
-    productCache.set(code,localProduct);
-
-    if(localProduct.foto_url) return localProduct;
-
-    const kb=await buscarNoKodebar(code);
-    if(kb){
-      const merged={
-        ...localProduct,
-        nome:localProduct.nome || kb.nome,
-        foto_url:kb.foto_url || ''
-      };
-      productCache.set(code,merged);
-      return merged;
-    }
-
-    return localProduct;
-  }
-
-  // 4) Supabase
+  // 2) Procura primeiro no Supabase.
   const {data,error}=await supabaseClient
     .from('produtos')
     .select('id,codigo_barras,nome,foto_url,ativo')
@@ -410,24 +333,64 @@ async function getProductByCode(codigo){
     );
   }
 
+  // 3) Produto já existe no Supabase.
   if(data){
     let product={
       id:data.id,
       codigo:normalize(data.codigo_barras),
-      nome:data.nome || '',
-      foto_url:data.foto_url || ''
+      nome:String(data.nome || '').trim(),
+      foto_url:String(data.foto_url || '').trim()
     };
 
-    // Se faltar nome ou foto, tenta complementar pela Kodebar.
+    // Só consulta a Kodebar se realmente estiver faltando alguma informação.
     if(!product.nome || !product.foto_url){
       const kb=await buscarNoKodebar(code);
 
-      if(kb){
-        product={
-          ...product,
-          nome:product.nome || kb.nome,
-          foto_url:product.foto_url || kb.foto_url
-        };
+      const novoNome=
+        product.nome ||
+        (kb && kb.nome ? String(kb.nome).trim() : '');
+
+      const novaFoto=
+        product.foto_url ||
+        (kb && kb.foto_url ? String(kb.foto_url).trim() : '');
+
+      const atualizacoes={};
+
+      if(!product.nome && novoNome){
+        atualizacoes.nome=novoNome;
+        product.nome=novoNome;
+      }
+
+      if(!product.foto_url && novaFoto){
+        atualizacoes.foto_url=novaFoto;
+        product.foto_url=novaFoto;
+      }
+
+      // Grava automaticamente no Supabase somente o que estava faltando.
+      if(Object.keys(atualizacoes).length){
+        const {
+          data:produtoAtualizado,
+          error:atualizacaoError
+        } = await supabaseClient
+          .from('produtos')
+          .update(atualizacoes)
+          .eq('id',data.id)
+          .select('id,codigo_barras,nome,foto_url,ativo')
+          .single();
+
+        if(atualizacaoError){
+          console.warn(
+            'Produto encontrado, mas não foi possível completar os dados no Supabase:',
+            atualizacaoError
+          );
+        }else if(produtoAtualizado){
+          product={
+            id:produtoAtualizado.id,
+            codigo:normalize(produtoAtualizado.codigo_barras),
+            nome:String(produtoAtualizado.nome || '').trim(),
+            foto_url:String(produtoAtualizado.foto_url || '').trim()
+          };
+        }
       }
     }
 
@@ -435,17 +398,77 @@ async function getProductByCode(codigo){
     return product;
   }
 
-  // 5) Não encontrou no banco: consulta Kodebar.
+  // 4) Produto não existe no Supabase.
+  // Primeiro tenta a Kodebar. Se encontrar, já cria o produto no Supabase.
   const kb=await buscarNoKodebar(code);
 
-  if(kb){
-    productCache.set(code,kb);
-    return kb;
+  if(kb && kb.nome){
+    const {
+      data:novoProduto,
+      error:novoProdutoError
+    } = await supabaseClient
+      .from('produtos')
+      .insert({
+        codigo_barras:code,
+        nome:String(kb.nome || '').trim(),
+        foto_url:String(kb.foto_url || '').trim(),
+        ativo:true
+      })
+      .select('id,codigo_barras,nome,foto_url,ativo')
+      .single();
+
+    if(!novoProdutoError && novoProduto){
+      const product={
+        id:novoProduto.id,
+        codigo:normalize(novoProduto.codigo_barras),
+        nome:String(novoProduto.nome || '').trim(),
+        foto_url:String(novoProduto.foto_url || '').trim()
+      };
+
+      productCache.set(code,product);
+      return product;
+    }
+
+    // Se não conseguiu inserir, mantém o resultado da API para o fluxo de cadastro.
+    if(novoProdutoError){
+      console.warn(
+        'Kodebar encontrou o produto, mas não foi possível criá-lo no Supabase:',
+        novoProdutoError
+      );
+    }
+  }
+
+  // 5) Fallback local: permite cadastro manual caso a API não encontre o produto.
+  const fixedProduct=byCode.get(code);
+
+  if(fixedProduct){
+    const localProduct={
+      codigo:code,
+      nome:String(fixedProduct.nome || '').trim(),
+      foto_url:''
+    };
+
+    productCache.set(code,localProduct);
+    return localProduct;
+  }
+
+  const catalogProduct=readProductCatalog().find(
+    p=>normalize(p.codigo)===code
+  );
+
+  if(catalogProduct && catalogProduct.nome){
+    const localProduct={
+      codigo:code,
+      nome:String(catalogProduct.nome || '').trim(),
+      foto_url:String(catalogProduct.foto_url || '').trim()
+    };
+
+    productCache.set(code,localProduct);
+    return localProduct;
   }
 
   return null;
 }
-
 
 /* =========================================================
    UPLOAD DA FOTO
@@ -1386,6 +1409,13 @@ async function registerProduct(){
           .insert({
             codigo_barras:code,
             nome:name,
+            foto_url:
+              (
+                selected &&
+                selected.foto_url
+              )
+                ? selected.foto_url
+                : null,
             ativo:true
           })
           .select(
@@ -1440,6 +1470,48 @@ async function registerProduct(){
 
     }
 
+    /*
+      Se o produto já existia no Supabase, mas estava sem nome,
+      salva automaticamente o nome obtido da API ou digitado.
+    */
+    if(
+      produto &&
+      !String(produto.nome || '').trim() &&
+      name
+    ){
+      const {
+        data:produtoComNome,
+        error:nomeError
+      } = await supabaseClient
+        .from('produtos')
+        .update({
+          nome:name
+        })
+        .eq('id',produto.id)
+        .select('id,codigo_barras,nome,foto_url,ativo')
+        .single();
+
+      if(nomeError){
+        throw new Error(
+          'O produto foi localizado, mas não foi possível salvar o nome: '+
+          nomeError.message
+        );
+      }
+
+      if(produtoComNome){
+        produto.nome=produtoComNome.nome || name;
+      }else{
+        produto.nome=name;
+      }
+
+      productCache.set(code,{
+        id:produto.id,
+        codigo:code,
+        nome:produto.nome,
+        foto_url:produto.foto_url || ''
+      });
+    }
+
     const file=
       $('photo') &&
       $('photo').files[0];
@@ -1453,34 +1525,44 @@ async function registerProduct(){
     const kodebarPhoto=
       selected &&
       selected.foto_url
-        ? selected.foto_url
+        ? String(selected.foto_url).trim()
         : '';
 
+    /*
+      Se o produto já tem foto no Supabase, ela é preservada.
+      Se não tem, qualquer foto encontrada pela API é gravada
+      automaticamente em produtos.foto_url.
+    */
     if(!file && kodebarPhoto && !produto.foto_url){
-      try{
-        const { error:kodebarPhotoError } =
-          await supabaseClient
-            .from('produtos')
-            .update({
-              foto_url:kodebarPhoto
-            })
-            .eq('id',produto.id);
+      const {data:produtoComFoto,error:kodebarPhotoError} =
+        await supabaseClient
+          .from('produtos')
+          .update({
+            foto_url:kodebarPhoto
+          })
+          .eq('id',produto.id)
+          .select('id,codigo_barras,nome,foto_url,ativo')
+          .single();
 
-        if(kodebarPhotoError){
-          throw kodebarPhotoError;
-        }
-
-        produto.foto_url=kodebarPhoto;
-
-        productCache.set(code,{
-          id:produto.id,
-          codigo:code,
-          nome:produto.nome || name,
-          foto_url:kodebarPhoto
-        });
-      }catch(e){
-        console.warn('Não foi possível salvar a foto da Kodebar no produto:',e);
+      if(kodebarPhotoError){
+        throw new Error(
+          'A foto foi encontrada, mas não foi possível salvá-la no produto: '+
+          kodebarPhotoError.message
+        );
       }
+
+      if(produtoComFoto){
+        produto.foto_url=produtoComFoto.foto_url || kodebarPhoto;
+      }else{
+        produto.foto_url=kodebarPhoto;
+      }
+
+      productCache.set(code,{
+        id:produto.id,
+        codigo:code,
+        nome:produto.nome || name,
+        foto_url:produto.foto_url
+      });
     }
 
 
