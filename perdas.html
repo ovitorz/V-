@@ -130,11 +130,49 @@ const losses = [
 ];
 
 let lossData = [...losses];
+let currentUsuario = null;
+let currentLojaId = null;
+let currentPerfil = null;
+
+async function loadCurrentUser(){
+  const {data,error}=await supabaseClient.auth.getSession();
+  if(error || !data.session){
+    location.replace('login.html');
+    return false;
+  }
+
+  const {data:u,error:e}=await supabaseClient
+    .from('usuarios')
+    .select('id,auth_user_id,loja_id,perfil,nome,ativo')
+    .eq('auth_user_id',data.session.user.id)
+    .maybeSingle();
+
+  if(e || !u || u.ativo===false){
+    await supabaseClient.auth.signOut();
+    location.replace('login.html');
+    return false;
+  }
+
+  if(!['gerente','gerente_geral','admin_global'].includes(u.perfil)){
+    location.replace('leitor.html');
+    return false;
+  }
+
+  if(u.perfil==='gerente' && !u.loja_id){
+    alert('Seu usuário ainda não possui uma loja vinculada.');
+    return false;
+  }
+
+  currentUsuario=u;
+  currentLojaId=u.loja_id;
+  currentPerfil=u.perfil;
+  return true;
+}
 
 async function loadLossesFromSupabase(){
   if(!USE_SUPABASE) return;
 
-  const { data, error } = await supabaseClient
+  let query = supabaseClient
     .from('perdas')
     .select(`
       id,
@@ -147,6 +185,10 @@ async function loadLossesFromSupabase(){
       produtos ( id, nome, codigo_barras )
     `)
     .order('data_perda', { ascending:false });
+
+  if(currentPerfil==='gerente') query=query.eq('loja_id',currentLojaId);
+
+  const { data, error } = await query;
 
   if(error){
     console.error('Erro ao carregar perdas:', error);
@@ -172,11 +214,15 @@ async function loadLossesFromSupabase(){
 async function saveCostToSupabase(g, cost){
   if(!USE_SUPABASE) return true;
 
-  const { error } = await supabaseClient
+  let query = supabaseClient
     .from('perdas')
     .update({ custo: cost })
     .eq('produto_id', g.productId)
     .eq('data_perda', g.date);
+
+  if(currentPerfil==='gerente') query=query.eq('loja_id',currentLojaId);
+
+  const { error } = await query;
 
   if(error){
     console.error('Erro ao salvar custo:', error);
@@ -345,6 +391,8 @@ function showTab(tab){
 document.getElementById('month').addEventListener('change',render);
 
 (async function init(){
+  const ok=await loadCurrentUser();
+  if(!ok) return;
   await loadLossesFromSupabase();
   render();
 })();
