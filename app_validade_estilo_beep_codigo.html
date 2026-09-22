@@ -170,6 +170,100 @@ const productCache = new Map();
 const KEY = 'validades_v2';
 const PHOTOS = 'fotos_produtos_v2';
 const PRODUTOS_KEY = 'produtos_cadastrados_v1';
+const KODEBAR_API_KEY = 'kb_live_po8wmg73f88s6capma5rsr4r0lbkc7mt';
+const KODEBAR_ENDPOINT = 'https://kodebar.korvensistemas.com.br/gtin/lookup';
+const KODEBAR_CACHE_KEY = 'kodebar_produtos_v1';
+
+function readKodebarCache(){
+  try{
+    const raw=localStorage.getItem(KODEBAR_CACHE_KEY);
+    const value=raw ? JSON.parse(raw) : {};
+    return value && typeof value==='object' ? value : {};
+  }catch(e){
+    return {};
+  }
+}
+
+function saveKodebarCache(product){
+  if(!product || !product.codigo) return;
+  try{
+    const cache=readKodebarCache();
+    cache[String(product.codigo)]={
+      codigo:String(product.codigo),
+      nome:String(product.nome || ''),
+      foto_url:String(product.foto_url || '')
+    };
+    localStorage.setItem(KODEBAR_CACHE_KEY,JSON.stringify(cache));
+  }catch(e){
+    console.warn('Não foi possível salvar o cache Kodebar:',e);
+  }
+}
+
+async function buscarNoKodebar(codigo){
+  const code=normalize(codigo);
+  if(!code) return null;
+
+  const cache=readKodebarCache()[code];
+  if(cache && cache.nome){
+    return cache;
+  }
+
+  if(
+    !KODEBAR_API_KEY ||
+    KODEBAR_API_KEY === 'kb_live_po8wmg73f88s6capma5rsr4r0lbkc7mt'
+  ){
+    return null;
+  }
+
+  try{
+    const response=await fetch(
+      KODEBAR_ENDPOINT+'?gtin='+encodeURIComponent(code),
+      {
+        method:'GET',
+        headers:{
+          'X-API-Key':KODEBAR_API_KEY,
+          'Accept':'application/json'
+        },
+        cache:'no-store'
+      }
+    );
+
+    if(response.status===404){
+      return null;
+    }
+
+    if(response.status===429){
+      console.warn('Limite diário da Kodebar atingido.');
+      return null;
+    }
+
+    if(!response.ok){
+      console.warn('Kodebar retornou HTTP '+response.status);
+      return null;
+    }
+
+    const data=await response.json();
+
+    if(!data || !data.nome){
+      return null;
+    }
+
+    const product={
+      codigo:code,
+      nome:String(data.nome || '').trim(),
+      foto_url:String(data.thumbnail || '').trim()
+    };
+
+    saveKodebarCache(product);
+    return product;
+
+  }catch(e){
+    console.warn('Falha ao consultar Kodebar:',e);
+    return null;
+  }
+}
+
+
 function readProductCatalog(){
   try{
     const raw = localStorage.getItem(PRODUTOS_KEY);
@@ -213,137 +307,140 @@ async function getProductByCode(codigo){
 
   // 1) Cache da sessão
   const cached=productCache.get(code);
-
   if(cached){
-    return cached;
+    // Se já temos nome e foto, não consulta nada.
+    if(cached.nome && cached.foto_url) return cached;
   }
 
   // 2) Catálogo fixo
   const fixedProduct=byCode.get(code);
-
   if(fixedProduct){
-
     const localProduct={
       codigo:code,
       nome:fixedProduct.nome,
       foto_url:''
     };
+    productCache.set(code,localProduct);
 
-    productCache.set(
-      code,
-      localProduct
-    );
-
-    // Busca dados atualizados em segundo plano
+    // Tenta atualizar foto/nome no Supabase em segundo plano.
     supabaseClient
       .from('produtos')
-      .select(
-        'id,codigo_barras,nome,foto_url,ativo'
-      )
+      .select('id,codigo_barras,nome,foto_url,ativo')
       .eq('codigo_barras',code)
       .eq('ativo',true)
       .limit(1)
       .maybeSingle()
-      .then(({data,error})=>{
+      .then(async ({data,error})=>{
+        if(error || !data) return;
 
-        if(!error && data){
+        let foto=data.foto_url || '';
+        let nome=data.nome || localProduct.nome;
 
-          productCache.set(
-            code,
-            {
-              id:data.id,
-              codigo:normalize(data.codigo_barras),
-              nome:data.nome || localProduct.nome,
-              foto_url:data.foto_url || ''
-            }
-          );
-
-          // Se a tela ainda estiver mostrando este produto,
-          // atualiza a foto automaticamente.
-          if(
-            selected &&
-            normalize(selected.codigo)===code
-          ){
-            selected={
-              id:data.id,
-              codigo:normalize(data.codigo_barras),
-              nome:data.nome || localProduct.nome,
-              foto_url:data.foto_url || ''
-            };
-
-            renderProduct();
-          }
+        if(!foto){
+          const kb=await buscarNoKodebar(code);
+          if(kb?.foto_url) foto=kb.foto_url;
+          if(!data.nome && kb?.nome) nome=kb.nome;
         }
 
+        productCache.set(code,{
+          id:data.id,
+          codigo:normalize(data.codigo_barras),
+          nome,
+          foto_url:foto
+        });
+
+        if(selected && normalize(selected.codigo)===code){
+          selected={
+            id:data.id,
+            codigo:normalize(data.codigo_barras),
+            nome,
+            foto_url:foto
+          };
+          renderProduct();
+        }
       })
       .catch(()=>{});
 
     return localProduct;
   }
 
-
   // 3) Catálogo local antigo
   const catalogProduct=readProductCatalog().find(
     p=>normalize(p.codigo)===code
   );
 
-  if(
-    catalogProduct &&
-    catalogProduct.nome
-  ){
-
+  if(catalogProduct && catalogProduct.nome){
     const localProduct={
       codigo:code,
       nome:catalogProduct.nome,
-      foto_url:''
+      foto_url:catalogProduct.foto_url || ''
     };
 
-    productCache.set(
-      code,
-      localProduct
-    );
+    productCache.set(code,localProduct);
+
+    if(localProduct.foto_url) return localProduct;
+
+    const kb=await buscarNoKodebar(code);
+    if(kb){
+      const merged={
+        ...localProduct,
+        nome:localProduct.nome || kb.nome,
+        foto_url:kb.foto_url || ''
+      };
+      productCache.set(code,merged);
+      return merged;
+    }
 
     return localProduct;
   }
 
-
   // 4) Supabase
   const {data,error}=await supabaseClient
     .from('produtos')
-    .select(
-      'id,codigo_barras,nome,foto_url,ativo'
-    )
+    .select('id,codigo_barras,nome,foto_url,ativo')
     .eq('codigo_barras',code)
     .eq('ativo',true)
     .limit(1)
     .maybeSingle();
 
   if(error){
-    console.error(
-      'Erro consultando o Supabase:',
-      error
-    );
-
+    console.error('Erro consultando o Supabase:',error);
     throw new Error(
       'Não foi possível consultar o cadastro de produtos.'
     );
   }
 
   if(data){
-
-    const product={
+    let product={
       id:data.id,
       codigo:normalize(data.codigo_barras),
       nome:data.nome || '',
       foto_url:data.foto_url || ''
     };
 
-    productCache.set(
-      code,
-      product
-    );
+    // Se faltar nome ou foto, tenta complementar pela Kodebar.
+    if(!product.nome || !product.foto_url){
+      const kb=await buscarNoKodebar(code);
 
+      if(kb){
+        product={
+          ...product,
+          nome:product.nome || kb.nome,
+          foto_url:product.foto_url || kb.foto_url
+        };
+      }
+    }
+
+    productCache.set(code,product);
     return product;
+  }
+
+  // 5) Não encontrou no banco: consulta Kodebar.
+  const kb=await buscarNoKodebar(code);
+
+  if(kb){
+    productCache.set(code,kb);
+    return kb;
   }
 
   return null;
@@ -1343,15 +1440,48 @@ async function registerProduct(){
 
     }
 
-
-    /* -------------------------------------------------------
-       FOTO
-       ------------------------------------------------------- */
-
     const file=
       $('photo') &&
       $('photo').files[0];
 
+    /* -------------------------------------------------------
+       FOTO DA KODEBAR
+       Se não foi escolhida uma foto manualmente, usa a imagem
+       retornada pela Kodebar quando disponível.
+       ------------------------------------------------------- */
+
+    const kodebarPhoto=
+      selected &&
+      selected.foto_url
+        ? selected.foto_url
+        : '';
+
+    if(!file && kodebarPhoto && !produto.foto_url){
+      try{
+        await supabaseClient
+          .from('produtos')
+          .update({
+            foto_url:kodebarPhoto
+          })
+          .eq('id',produto.id);
+
+        produto.foto_url=kodebarPhoto;
+
+        productCache.set(code,{
+          id:produto.id,
+          codigo:code,
+          nome:produto.nome || name,
+          foto_url:kodebarPhoto
+        });
+      }catch(e){
+        console.warn('Não foi possível salvar a foto da Kodebar no produto:',e);
+      }
+    }
+
+
+    /* -------------------------------------------------------
+       FOTO
+       ------------------------------------------------------- */
 
     if(file){
 
