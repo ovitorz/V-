@@ -5,7 +5,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Validades">
-  <link rel="apple-touch-icon" href="icons/icon-180.png"><meta charset="utf-8"><meta name="viewport" content="width=device-width,iniatial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff"><title>Cadastro de Validade</title><style>
+  <link rel="apple-touch-icon" href="icons/icon-180.png"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#ffffff"><title>Cadastro de Validade</title><style>
 *{box-sizing:border-box}
 body{margin:0;font-family:Arial,sans-serif;background:#f7f7f8;color:#171717}
 .app{max-width:520px;margin:auto;min-height:100vh;padding:14px}
@@ -1458,12 +1458,17 @@ async function registerProduct(){
 
     if(!file && kodebarPhoto && !produto.foto_url){
       try{
-        await supabaseClient
-          .from('produtos')
-          .update({
-            foto_url:kodebarPhoto
-          })
-          .eq('id',produto.id);
+        const { error:kodebarPhotoError } =
+          await supabaseClient
+            .from('produtos')
+            .update({
+              foto_url:kodebarPhoto
+            })
+            .eq('id',produto.id);
+
+        if(kodebarPhotoError){
+          throw kodebarPhotoError;
+        }
 
         produto.foto_url=kodebarPhoto;
 
