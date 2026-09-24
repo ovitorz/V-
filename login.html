@@ -64,7 +64,7 @@ const {error}=await supabaseClient.auth.signInWithPassword({email,password});
 setLoading(false);
 if(error){showMessage('E-mail ou senha incorretos.');return}
 // Redireciona assim que o Supabase confirmou a sessão.
-window.location.replace('validades.html');
+window.location.replace('lista_valididades.html');
 });
 
 forgotBtn.addEventListener('click',async()=>{
