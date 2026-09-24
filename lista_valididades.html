@@ -22,6 +22,8 @@
     --yellow-bg:#fff5d6;
     --red:#c93636;
     --red-bg:#fde7e7;
+    --orange:#f28c00;
+    --orange-bg:#fff1dc;
     --accent:#222;
   }
   body{
@@ -122,6 +124,11 @@
     cursor:pointer;-webkit-tap-highlight-color:transparent;
   }
   .item:active{transform:scale(.995)}
+  .item.today{
+    border:2px solid var(--orange);
+    box-shadow:0 0 0 2px rgba(242,140,0,.10),0 3px 10px rgba(242,140,0,.10);
+  }
+  .item.today .date{color:#b76500;font-weight:850}
   .item{content-visibility:auto;contain-intrinsic-size:92px}
   .item::after{
     content:'›';align-self:center;color:#aaa;font-size:22px;padding-left:2px
@@ -145,6 +152,7 @@
   }
   .normal{color:#707070;background:#f1f1ef}
   .warning{color:#966900;background:var(--yellow-bg)}
+  .today{color:#b76500;background:var(--orange-bg)}
   .expired{color:var(--red);background:var(--red-bg)}
   .name{
     font-size:14px;font-weight:650;line-height:1.25;margin-bottom:3px;
@@ -604,14 +612,104 @@ function getProductName(record){
    FOTO
 ========================================================= */
 
+function storagePathFromValue(value){
+
+  let v=String(value || '').trim();
+
+  if(!v){
+    return '';
+  }
+
+  // Formato novo: o banco guarda somente o caminho no Storage.
+  if(v.startsWith('produtos/')){
+    return v.split('?')[0];
+  }
+
+  // Compatibilidade com URLs antigas do próprio bucket.
+  const markers=[
+    '/storage/v1/object/public/fotos_produtos/',
+    '/storage/v1/object/sign/fotos_produtos/',
+    '/storage/v1/object/authenticated/fotos_produtos/'
+  ];
+
+  for(const marker of markers){
+
+    const index=v.indexOf(marker);
+
+    if(index>=0){
+      return decodeURIComponent(
+        v.slice(index + marker.length)
+      ).split('?')[0];
+    }
+  }
+
+  // URLs externas não são mais utilizadas.
+  return '';
+}
+
+
+async function carregarFotosStorage(){
+
+  const paths=[
+    ...new Set(
+      records
+        .map(r=>storagePathFromValue(r.foto_url))
+        .filter(Boolean)
+    )
+  ];
+
+  if(!paths.length){
+    return;
+  }
+
+  const {
+    data,
+    error
+  } = await supabaseClient
+    .storage
+    .from('fotos_produtos')
+    .createSignedUrls(paths,3600);
+
+  if(error){
+
+    console.warn(
+      'Não foi possível carregar as fotos do Storage:',
+      error
+    );
+
+    return;
+  }
+
+  const photoMapSigned=new Map(
+    (data || [])
+      .filter(item=>item && item.path && item.signedUrl)
+      .map(item=>[
+        item.path,
+        item.signedUrl
+      ])
+  );
+
+  records.forEach(record=>{
+
+    const path=storagePathFromValue(record.foto_url);
+
+    record._photo_url=
+      path
+        ? (photoMapSigned.get(path) || '')
+        : '';
+
+  });
+
+}
+
+
 function getPhoto(record){
 
   const code =
     normalizeCode(record.codigo);
 
   return (
-    record.foto_url ||
-    record.foto ||
+    record._photo_url ||
     photoMap[record.codigo] ||
     photoMap[code] ||
     ''
@@ -714,6 +812,15 @@ function statusFor(days){
     return {
       kind:'expired',
       label:'VENCIDO'
+    };
+
+  }
+
+  if(days === 0){
+
+    return {
+      kind:'today',
+      label:'VENCE HOJE'
     };
 
   }
@@ -902,6 +1009,9 @@ async function carregarValidades(){
       _status:statusFor(days)
     };
   });
+
+  // Gera as URLs temporárias das fotos em lote, sem usar URL pública.
+  await carregarFotosStorage();
 
   // A ordenação é feita uma única vez após o carregamento. Pesquisa e filtros
   // reaproveitam essa ordem sem precisar ordenar a lista novamente.
@@ -1389,7 +1499,7 @@ function render(){
     const img=getPhoto(record);
     const store=record.loja_nome || getStore(record);
 
-    return `<article class="item" role="button" tabindex="0" data-record-id="${escapeHtml(record.id)}">
+    return `<article class="item ${days===0?'today':''}" role="button" tabindex="0" data-record-id="${escapeHtml(record.id)}">
       <div class="photo">${img
         ? `<img src="${escapeHtml(img)}" alt="" loading="lazy" decoding="async">`
         : `<span>□</span>`}</div>
