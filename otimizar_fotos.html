@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Otimizar fotos</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f7f7f8;font-family:Arial,sans-serif;color:#171717}
+.app{max-width:560px;margin:auto;padding:14px}
+.card{background:#fff;border-radius:18px;padding:20px;box-shadow:0 4px 18px rgba(0,0,0,.07);margin-bottom:14px}
+h1{font-size:20px;margin:0 0 6px}
+p{color:#555;font-size:14px;line-height:1.45}
+button{width:100%;padding:14px;border:0;border-radius:12px;background:#171717;color:#fff;font-weight:700;font-size:15px;margin-top:8px}
+button.sec{background:#e8e8ea;color:#171717}
+button:disabled{opacity:.5}
+#bar{height:10px;background:#e8e8ea;border-radius:6px;overflow:hidden;margin:12px 0}
+#bar i{display:block;height:100%;width:0;background:#1a9d5a}
+#log{font-size:12px;color:#444;max-height:240px;overflow:auto;white-space:pre-wrap;background:#fafafa;border-radius:10px;padding:10px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="card">
+<h1>Otimizar fotos antigas</h1>
+<p>Reduz as fotos já guardadas no Storage (lado maior 1000px, JPEG). O nome e o caminho de cada foto continuam os mesmos, então o app não muda. Só altera fotos maiores que 250 KB. Use logado como administrador.</p>
+<p><b>Atenção:</b> a foto original é substituída pela versão menor. Esta página baixa cada foto uma vez (isso conta no egress).</p>
+<button id="btnAnalisar" class="sec">1. Analisar (não altera nada)</button>
+<button id="btnTeste" class="sec" disabled>2. Testar com 1 foto</button>
+<button id="btnTodas" disabled>3. Otimizar todas</button>
+<div id="bar"><i></i></div>
+<div id="status"></div>
+<div id="log"></div>
+</div>
+</div>
+<script>
+const SUPABASE_URL='https://siuvsahkjfyzdcrskleg.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY='sb_publishable_At--bKaS3ZiZA0dmyN5FIQ_5WF735Nl';
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const BUCKET='fotos_produtos', PASTA='produtos', MIN_BYTES=250*1024;
+const $=id=>document.getElementById(id);
+let candidatas=[];
+
+const mb=n=>(n/1048576).toFixed(2)+' MB';
+const log=t=>{$('log').textContent+=t+'\n';$('log').scrollTop=1e9};
+const prog=(a,b)=>{$('bar').firstElementChild.style.width=(b?a/b*100:0)+'%'};
+
+async function compress(blob){
+  const MAX=1000;
+  const bmp=await createImageBitmap(blob,{imageOrientation:'from-image'});
+  const s=Math.min(1,MAX/Math.max(bmp.width,bmp.height));
+  const w=Math.round(bmp.width*s), h=Math.round(bmp.height*s);
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(bmp,0,0,w,h);
+  bmp.close&&bmp.close();
+  return new Promise(r=>c.toBlob(r,'image/jpeg',0.72));
+}
+
+async function listar(){
+  const todos=[]; let offset=0;
+  for(;;){
+    const {data,error}=await supabaseClient.storage.from(BUCKET).list(PASTA,{limit:100,offset,sortBy:{column:'name',order:'asc'}});
+    if(error) throw error;
+    if(!data||!data.length) break;
+    todos.push(...data.filter(f=>f.id)); // ignora pastas
+    if(data.length<100) break;
+    offset+=100;
+  }
+  return todos;
+}
+
+async function otimizar(lista){
+  let antes=0, depois=0, ok=0, falhas=0;
+  for(let i=0;i<lista.length;i++){
+    const f=lista[i], path=PASTA+'/'+f.name, tam=f.metadata?.size||0;
+    try{
+      const {data:blob,error}=await supabaseClient.storage.from(BUCKET).download(path);
+      if(error) throw error;
+      const novo=await compress(blob);
+      if(!novo || novo.size>=blob.size*0.85){ log('Pulou (ganho pequeno): '+f.name); continue; }
+      const {error:up}=await supabaseClient.storage.from(BUCKET).upload(
+        path,new File([novo],f.name,{type:'image/jpeg'}),
+        {upsert:true,cacheControl:'31536000',contentType:'image/jpeg'});
+      if(up) throw up;
+      antes+=blob.size; depois+=novo.size; ok++;
+      log(f.name+': '+mb(blob.size)+' → '+mb(novo.size));
+    }catch(e){ falhas++; log('ERRO '+f.name+': '+(e.message||e)); }
+    prog(i+1,lista.length);
+  }
+  $('status').textContent=`Pronto: ${ok} otimizadas, ${falhas} com erro. ${mb(antes)} → ${mb(depois)} (economia de ${mb(antes-depois)}).`;
+  try{localStorage.removeItem('fotos_signed_urls_v1');}catch(e){}
+}
+
+$('btnAnalisar').onclick=async()=>{
+  $('btnAnalisar').disabled=true; $('log').textContent=''; $('status').textContent='Analisando...';
+  try{
+    const {data:{session}}=await supabaseClient.auth.getSession();
+    if(!session){ $('status').textContent='Faça login no app primeiro (login.html) e volte aqui.'; return; }
+    const todos=await listar();
+    candidatas=todos.filter(f=>(f.metadata?.size||0)>MIN_BYTES);
+    const total=todos.reduce((a,f)=>a+(f.metadata?.size||0),0);
+    const grandes=candidatas.reduce((a,f)=>a+(f.metadata?.size||0),0);
+    $('status').textContent=`${todos.length} fotos (${mb(total)}). ${candidatas.length} acima de 250 KB, somando ${mb(grandes)}.`;
+    $('btnTeste').disabled=$('btnTodas').disabled=!candidatas.length;
+  }catch(e){ $('status').textContent='Erro: '+(e.message||e); }
+  $('btnAnalisar').disabled=false;
+};
+$('btnTeste').onclick=async()=>{ $('btnTeste').disabled=true; $('log').textContent=''; await otimizar(candidatas.slice(0,1)); $('btnTeste').disabled=false; };
+$('btnTodas').onclick=async()=>{
+  if(!confirm('Substituir as '+candidatas.length+' fotos pelas versões menores?')) return;
+  $('btnTodas').disabled=$('btnTeste').disabled=true; $('log').textContent=''; await otimizar(candidatas);
+};
+</script>
+</body>
+</html>
