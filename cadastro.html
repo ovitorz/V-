@@ -275,15 +275,118 @@ async function getProductByCode(codigo){
   return product;
 }
 
+
+/* =========================================================
+   CACHE DAS URLs ASSINADAS DAS FOTOS
+   Antes: cada abertura gerava uma URL nova, então o navegador
+   baixava todas as fotos de novo. Agora a mesma URL é reaproveitada
+   por vários dias e o navegador usa a foto que já está no cache.
+   ========================================================= */
+
+const FOTO_URL_CACHE_KEY='fotos_signed_urls_v1';
+const FOTO_URL_TTL=7*24*3600;            // validade da URL: 7 dias
+const FOTO_URL_RENOVAR_ANTES=24*3600;    // renova quando faltar 1 dia
+
+function lerCacheFotoUrls(){
+  try{
+    return JSON.parse(localStorage.getItem(FOTO_URL_CACHE_KEY)||'{}')||{};
+  }catch(e){
+    return {};
+  }
+}
+
+function salvarCacheFotoUrls(cache){
+  try{
+    localStorage.setItem(FOTO_URL_CACHE_KEY,JSON.stringify(cache));
+  }catch(e){
+    // Sem espaço ou bloqueado: o app continua funcionando sem cache.
+  }
+}
+
+function fotoUrlValida(item){
+  return !!(
+    item && item.url && item.exp &&
+    item.exp-Date.now() > FOTO_URL_RENOVAR_ANTES*1000
+  );
+}
+
+function invalidarCacheFotoUrl(path){
+  const cache=lerCacheFotoUrls();
+  if(cache[path]){
+    delete cache[path];
+    salvarCacheFotoUrls(cache);
+  }
+}
+
+
 /* =========================================================
    UPLOAD DA FOTO
    ========================================================= */
+
+/* Reduz a foto (lado maior 1000px, JPEG 72%) antes de enviar.
+   Uma foto de 3 MB do celular vira ~100-200 KB. Se algo falhar,
+   envia a foto original, como antes. */
+async function compressProductPhoto(file){
+  try{
+    if(!file || !file.type || !file.type.startsWith('image/')) return file;
+    if(file.type==='image/gif') return file;
+
+    const MAX=1000;
+    let source,w,h;
+
+    if(window.createImageBitmap){
+      source=await createImageBitmap(file,{imageOrientation:'from-image'});
+      w=source.width; h=source.height;
+    }else{
+      source=await new Promise((resolve,reject)=>{
+        const url=URL.createObjectURL(file);
+        const img=new Image();
+        img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+        img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('img'));};
+        img.src=url;
+      });
+      w=source.naturalWidth; h=source.naturalHeight;
+    }
+
+    if(!w || !h) return file;
+
+    const scale=Math.min(1,MAX/Math.max(w,h));
+    const cw=Math.round(w*scale);
+    const ch=Math.round(h*scale);
+
+    const canvas=document.createElement('canvas');
+    canvas.width=cw;
+    canvas.height=ch;
+
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,cw,ch);
+    ctx.drawImage(source,0,0,cw,ch);
+
+    if(source.close) source.close();
+
+    const blob=await new Promise(resolve=>
+      canvas.toBlob(resolve,'image/jpeg',0.72)
+    );
+
+    if(!blob || blob.size>=file.size) return file;
+
+    return new File([blob],'foto.jpg',{type:'image/jpeg'});
+
+  }catch(e){
+    console.warn('Não foi possível comprimir a foto, enviando original:',e);
+    return file;
+  }
+}
+
 
 async function uploadProductPhoto(file,produtoId){
 
   if(!file || !produtoId){
     return '';
   }
+
+  file=await compressProductPhoto(file);
 
   // Verifica tamanho
   if(file.size > 10 * 1024 * 1024){
@@ -404,6 +507,10 @@ async function uploadProductPhoto(file,produtoId){
     Quando a foto for exibida, o app gera uma URL assinada
     temporária diretamente pelo Supabase.
   */
+
+  // A foto desse produto mudou: descarta a URL guardada para não
+  // continuar exibindo a imagem antiga.
+  invalidarCacheFotoUrl(filePath);
 
   return filePath;
 }
@@ -671,13 +778,19 @@ async function getStoragePhotoUrl(value){
     return '';
   }
 
+  const cache=lerCacheFotoUrls();
+
+  if(fotoUrlValida(cache[path])){
+    return cache[path].url;
+  }
+
   const {
     data,
     error
   } = await supabaseClient
     .storage
     .from('fotos_produtos')
-    .createSignedUrl(path,3600);
+    .createSignedUrl(path,FOTO_URL_TTL);
 
   if(error){
 
@@ -689,7 +802,14 @@ async function getStoragePhotoUrl(value){
     return '';
   }
 
-  return data?.signedUrl || '';
+  const url=data?.signedUrl || '';
+
+  if(url){
+    cache[path]={url,exp:Date.now()+FOTO_URL_TTL*1000};
+    salvarCacheFotoUrls(cache);
+  }
+
+  return url;
 }
 
 
