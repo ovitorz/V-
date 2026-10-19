@@ -648,6 +648,50 @@ function storagePathFromValue(value){
 }
 
 
+
+/* =========================================================
+   CACHE DAS URLs ASSINADAS DAS FOTOS
+   Antes: cada abertura gerava uma URL nova, então o navegador
+   baixava todas as fotos de novo. Agora a mesma URL é reaproveitada
+   por vários dias e o navegador usa a foto que já está no cache.
+   ========================================================= */
+
+const FOTO_URL_CACHE_KEY='fotos_signed_urls_v1';
+const FOTO_URL_TTL=7*24*3600;            // validade da URL: 7 dias
+const FOTO_URL_RENOVAR_ANTES=24*3600;    // renova quando faltar 1 dia
+
+function lerCacheFotoUrls(){
+  try{
+    return JSON.parse(localStorage.getItem(FOTO_URL_CACHE_KEY)||'{}')||{};
+  }catch(e){
+    return {};
+  }
+}
+
+function salvarCacheFotoUrls(cache){
+  try{
+    localStorage.setItem(FOTO_URL_CACHE_KEY,JSON.stringify(cache));
+  }catch(e){
+    // Sem espaço ou bloqueado: o app continua funcionando sem cache.
+  }
+}
+
+function fotoUrlValida(item){
+  return !!(
+    item && item.url && item.exp &&
+    item.exp-Date.now() > FOTO_URL_RENOVAR_ANTES*1000
+  );
+}
+
+function invalidarCacheFotoUrl(path){
+  const cache=lerCacheFotoUrls();
+  if(cache[path]){
+    delete cache[path];
+    salvarCacheFotoUrls(cache);
+  }
+}
+
+
 async function carregarFotosStorage(){
 
   const paths=[
@@ -662,31 +706,48 @@ async function carregarFotosStorage(){
     return;
   }
 
-  const {
-    data,
-    error
-  } = await supabaseClient
-    .storage
-    .from('fotos_produtos')
-    .createSignedUrls(paths,3600);
+  // Reaproveita as URLs já geradas (mesma URL = foto vem do cache do
+  // navegador, sem gastar saída de dados). Só pede ao Supabase as que
+  // faltam ou estão perto de vencer.
+  const cache=lerCacheFotoUrls();
+  const faltando=paths.filter(path=>!fotoUrlValida(cache[path]));
 
-  if(error){
+  if(faltando.length){
 
-    console.warn(
-      'Não foi possível carregar as fotos do Storage:',
+    const {
+      data,
       error
-    );
+    } = await supabaseClient
+      .storage
+      .from('fotos_produtos')
+      .createSignedUrls(faltando,FOTO_URL_TTL);
 
-    return;
+    if(error){
+
+      console.warn(
+        'Não foi possível carregar as fotos do Storage:',
+        error
+      );
+
+    }else{
+
+      (data || []).forEach(item=>{
+        if(item && item.path && item.signedUrl){
+          cache[item.path]={
+            url:item.signedUrl,
+            exp:Date.now()+FOTO_URL_TTL*1000
+          };
+        }
+      });
+
+      salvarCacheFotoUrls(cache);
+    }
   }
 
   const photoMapSigned=new Map(
-    (data || [])
-      .filter(item=>item && item.path && item.signedUrl)
-      .map(item=>[
-        item.path,
-        item.signedUrl
-      ])
+    paths
+      .filter(path=>cache[path] && cache[path].url)
+      .map(path=>[path,cache[path].url])
   );
 
   records.forEach(record=>{
